@@ -1,0 +1,27 @@
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory app:title="@string/category_connection">
+        <EditTextPreference
+            app:key="laptop_ip"
+            app:title="@string/ip_address_title"
+            app:summary="@string/ip_address_summary"
+            app:defaultValue="192.168.1.100" />
+            
+        <EditTextPreference
+            app:key="laptop_port"
+            app:title="@string/port_title"
+            app:summary="@string/port_summary"
+            app:defaultValue="9876"
+            android:inputType="number" />
+    </PreferenceCategory>
+    
+    <PreferenceCategory app:title="@string/category_notifications">
+        <SwitchPreferenceCompat
+            app:key="vibrate_enabled"
+            app:title="@string/vibrate_title"
+            app:summary="@string/vibrate_summary"
+            app:defaultValue="true" />
+    </PreferenceCategory>
+
+</PreferenceScreen>
