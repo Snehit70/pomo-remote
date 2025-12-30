@@ -1,8 +1,11 @@
 package com.pomoremote;
 
+import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.preference.PreferenceFragmentCompat;
+import com.pomoremote.service.PomodoroService;
 
 public class SettingsActivity extends AppCompatActivity {
     @Override
@@ -17,6 +20,18 @@ public class SettingsActivity extends AppCompatActivity {
         }
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        }
+    }
+    
+    @Override
+    protected void onPause() {
+        super.onPause();
+        Intent intent = new Intent(this, PomodoroService.class);
+        intent.setAction("RECONNECT");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent);
+        } else {
+            startService(intent);
         }
     }
 

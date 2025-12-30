@@ -6,10 +6,8 @@ import androidx.preference.PreferenceManager;
 
 public class UtilPreferenceManager {
     private final SharedPreferences prefs;
-    private final Context context;
 
     public UtilPreferenceManager(Context context) {
-        this.context = context;
         this.prefs = PreferenceManager.getDefaultSharedPreferences(context);
     }
 

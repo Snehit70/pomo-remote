@@ -2,7 +2,6 @@ package com.pomoremote.timer;
 
 import android.util.Log;
 import com.google.gson.Gson;
-import com.pomoremote.network.WebSocketClient;
 import java.io.IOException;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;

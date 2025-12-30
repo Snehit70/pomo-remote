@@ -32,4 +32,7 @@
     
     <string name="vibrate_title">Vibrate</string>
     <string name="vibrate_summary">Vibrate when timer completes</string>
+    
+    <string name="sound_title">Sound</string>
+    <string name="sound_summary">Play notification sound when timer completes</string>
 </resources>

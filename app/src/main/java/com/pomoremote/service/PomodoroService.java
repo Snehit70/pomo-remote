@@ -3,6 +3,9 @@ package com.pomoremote.service;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.media.Ringtone;
+import android.media.RingtoneManager;
+import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Handler;
@@ -39,6 +42,7 @@ public class PomodoroService extends Service implements WebSocketClient.Listener
     private TimerState currentState;
     private OkHttpClient httpClient;
     private Handler mainHandler;
+    private Ringtone currentRingtone;
 
     public class LocalBinder extends Binder {
         public PomodoroService getService() {
@@ -78,6 +82,8 @@ public class PomodoroService extends Service implements WebSocketClient.Listener
             toggleTimer();
         } else if ("SKIP".equals(action)) {
             skipTimer();
+        } else if ("RECONNECT".equals(action)) {
+            reconnect();
         }
     }
 
@@ -85,6 +91,11 @@ public class PomodoroService extends Service implements WebSocketClient.Listener
         String ip = prefs.getLaptopIp();
         int port = prefs.getLaptopPort();
         webSocketClient.connect(ip, port);
+    }
+    
+    public void reconnect() {
+        webSocketClient.close();
+        connect();
     }
 
     @Nullable
@@ -101,50 +112,61 @@ public class PomodoroService extends Service implements WebSocketClient.Listener
 
     @Override
     public void onConnected() {
-        isConnected = true;
-        Log.d(TAG, "Connected to WebSocket");
-        
-        TimerState localState = offlineTimer.getState();
-        syncManager.syncOnReconnect(prefs.getLaptopIp(), prefs.getLaptopPort(), localState);
-        
-        updateNotification();
+        mainHandler.post(() -> {
+            isConnected = true;
+            Log.d(TAG, "Connected to WebSocket");
+            
+            TimerState localState = offlineTimer.getState();
+            syncManager.syncOnReconnect(prefs.getLaptopIp(), prefs.getLaptopPort(), localState);
+            
+            updateNotification();
+            broadcastStateUpdate();
+        });
     }
 
     @Override
     public void onDisconnected() {
-        isConnected = false;
-        Log.d(TAG, "Disconnected from WebSocket");
-        syncManager.setOffline();
-        
-        if (TimerState.STATUS_RUNNING.equals(currentState.status)) {
-            offlineTimer.updateState(currentState);
-        }
-        
-        updateNotification();
+        mainHandler.post(() -> {
+            isConnected = false;
+            Log.d(TAG, "Disconnected from WebSocket");
+            syncManager.setOffline();
+            
+            if (TimerState.STATUS_RUNNING.equals(currentState.status)) {
+                offlineTimer.updateState(currentState);
+            }
+            
+            updateNotification();
+            broadcastStateUpdate();
+        });
     }
 
     @Override
     public void onStateReceived(TimerState state) {
-        this.currentState = state;
-        offlineTimer.updateState(state);
-        updateNotification();
-        
-        Intent intent = new Intent("com.pomoremote.STATE_UPDATE");
-        sendBroadcast(intent);
+        mainHandler.post(() -> {
+            this.currentState = state;
+            offlineTimer.updateState(state);
+            updateNotification();
+            broadcastStateUpdate();
+        });
     }
 
     public void onTimerUpdate(TimerState state) {
         this.currentState = state;
         updateNotification();
-        
-        Intent intent = new Intent("com.pomoremote.STATE_UPDATE");
-        sendBroadcast(intent);
+        broadcastStateUpdate();
     }
 
     public void onTimerComplete(TimerState state) {
         this.currentState = state;
         updateNotification();
+        broadcastStateUpdate();
         vibrate();
+        playSound();
+    }
+
+    private void broadcastStateUpdate() {
+        Intent intent = new Intent("com.pomoremote.STATE_UPDATE");
+        sendBroadcast(intent);
     }
 
     private void updateNotification() {
@@ -203,6 +225,27 @@ public class PomodoroService extends Service implements WebSocketClient.Listener
             v.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE));
         } else {
             v.vibrate(500);
+        }
+    }
+
+    private void playSound() {
+        if (!prefs.isSoundEnabled()) return;
+        
+        try {
+            if (currentRingtone != null && currentRingtone.isPlaying()) {
+                currentRingtone.stop();
+            }
+
+            Uri notification = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+            currentRingtone = RingtoneManager.getRingtone(getApplicationContext(), notification);
+            
+            if (currentRingtone != null) {
+                currentRingtone.play();
+            } else {
+                Log.w(TAG, "Could not get ringtone");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to play sound", e);
         }
     }
     
