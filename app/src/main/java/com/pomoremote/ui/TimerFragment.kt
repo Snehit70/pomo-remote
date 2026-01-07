@@ -52,6 +52,17 @@ class TimerFragment : Fragment() {
     private val mainActivity: MainActivity?
         get() = activity as? MainActivity
 
+    // Interpolation state
+    private var lastServerState: TimerState? = null
+    private var lastSyncTime: Long = 0
+    private val animationHandler = Handler(Looper.getMainLooper())
+    private val animationRunnable = object : Runnable {
+        override fun run() {
+            updateInterpolatedDisplay()
+            animationHandler.postDelayed(this, 16) // ~60fps
+        }
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -79,11 +90,19 @@ class TimerFragment : Fragment() {
         btnSkip.setOnClickListener { mainActivity?.skipTimer() }
         btnReset.setOnClickListener { mainActivity?.resetTimer() }
 
+        // Start animation loop
+        animationHandler.post(animationRunnable)
+
         // Initial UI update if service is already bound
         mainActivity?.service?.currentState?.let { updateUI(it) }
 
         // Fetch stats
         fetchStats()
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        animationHandler.removeCallbacks(animationRunnable)
     }
 
     private fun fetchStats() {
@@ -170,12 +189,49 @@ class TimerFragment : Fragment() {
         val context = context ?: return
         if (!isAdded) return
 
-        val totalSeconds = state.remaining
+        // Sync state for interpolation
+        lastServerState = state
+        lastSyncTime = System.currentTimeMillis()
+
+        // Update static UI elements immediately
+        updateStaticUI(state, context)
+    }
+
+    private fun updateInterpolatedDisplay() {
+        val state = lastServerState ?: return
+        if (!isAdded) return
+
+        var remaining = state.remaining
+
+        // If running, interpolate based on time elapsed since last sync
+        if (state.status == TimerState.STATUS_RUNNING) {
+            val elapsedSeconds = (System.currentTimeMillis() - lastSyncTime) / 1000.0
+            remaining = (state.remaining - elapsedSeconds).coerceAtLeast(0.0)
+        }
+
+        // Render remaining time with smooth milliseconds
+        val totalSeconds = remaining
         val minutes = totalSeconds.toInt() / 60
         val seconds = totalSeconds.toInt() % 60
         val millis = ((totalSeconds - totalSeconds.toInt()) * 100).toInt()
         tvTimer.text = String.format(Locale.US, "%02d:%02d.%02d", minutes, seconds, millis)
 
+        // Update progress bar smoothly
+        var total = state.duration
+        if (total <= 0) {
+             // Fallback default durations if missing
+             total = when (state.phase) {
+                 TimerState.PHASE_WORK -> 1500.0
+                 TimerState.PHASE_SHORT -> 300.0
+                 TimerState.PHASE_LONG -> 900.0
+                 else -> 1500.0
+             }
+        }
+        val progress = ((remaining / total) * 100).toInt()
+        progressIndicator.setProgressCompat(progress, true)
+    }
+
+    private fun updateStaticUI(state: TimerState, context: android.content.Context) {
         var phaseName = state.phase
         var colorRes = R.color.md_theme_primary
 
@@ -195,20 +251,6 @@ class TimerFragment : Fragment() {
         tvPhase.setTextColor(color)
         progressIndicator.setIndicatorColor(color)
         btnToggle.backgroundTintList = android.content.res.ColorStateList.valueOf(color)
-
-        // Progress Calculation
-        var total = state.duration
-        if (total <= 0) {
-             // Fallback default durations if missing
-             total = when (state.phase) {
-                 TimerState.PHASE_WORK -> 1500.0
-                 TimerState.PHASE_SHORT -> 300.0
-                 TimerState.PHASE_LONG -> 900.0
-                 else -> 1500.0
-             }
-        }
-        val progress = ((state.remaining / total) * 100).toInt()
-        progressIndicator.setProgressCompat(progress, true)
 
         // Button Icon
         if (TimerState.STATUS_RUNNING == state.status) {
