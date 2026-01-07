@@ -103,3 +103,7 @@ android-sdk/
 # Misc
 *.swp
 *~
+
+# Temporary screenshots and assets
+screen_*.png
+icon_*.png
