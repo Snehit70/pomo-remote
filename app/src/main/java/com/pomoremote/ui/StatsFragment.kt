@@ -23,8 +23,15 @@ import okhttp3.*
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
+import com.google.android.material.transition.MaterialFadeThrough
 
 class StatsFragment : Fragment() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enterTransition = MaterialFadeThrough()
+        exitTransition = MaterialFadeThrough()
+    }
 
     private lateinit var tvTotalFocus: TextView
     private lateinit var tvTotalSessions: TextView
