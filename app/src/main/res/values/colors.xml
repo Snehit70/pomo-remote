@@ -7,10 +7,18 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    
-    <color name="pomodoro_red">#F44336</color>
-    <color name="break_green">#4CAF50</color>
+
+    <!-- Material 3 Palette -->
+    <color name="md_theme_primary">#FF6B6B</color> <!-- Focus Coral -->
+    <color name="md_theme_onPrimary">#FFFFFF</color>
+    <color name="md_theme_primaryContainer">#33FF6B6B</color>
+    <color name="md_theme_secondary">#4ECDC4</color> <!-- Break Teal -->
+    <color name="md_theme_onSecondary">#000000</color>
+    <color name="md_theme_background">#121212</color> <!-- OLED Black -->
+    <color name="md_theme_surface">#1E1E1E</color> <!-- Dark Grey -->
+    <color name="md_theme_onSurface">#E6E1E5</color>
+    <color name="md_theme_surfaceVariant">#49454F</color>
+
     <color name="status_connected">#4CAF50</color>
-    <color name="status_disconnected">#F44336</color>
     <color name="status_offline">#FF9800</color>
 </resources>

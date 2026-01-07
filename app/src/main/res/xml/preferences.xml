@@ -6,7 +6,7 @@
             app:key="laptop_ip"
             app:title="@string/ip_address_title"
             app:summary="@string/ip_address_summary"
-            app:defaultValue="192.168.1.100"
+            app:defaultValue="192.168.29.98"
             android:inputType="phone" />
             
         <EditTextPreference
