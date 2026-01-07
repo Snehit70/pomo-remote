@@ -21,4 +21,5 @@
 
     <color name="status_connected">#4CAF50</color>
     <color name="status_offline">#FF9800</color>
+    <color name="gold">#FFD700</color>
 </resources>

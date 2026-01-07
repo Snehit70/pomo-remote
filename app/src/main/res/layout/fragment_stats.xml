@@ -217,15 +217,122 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Daily Breakdown Header -->
-        <TextView
-            android:layout_width="wrap_content"
+        <!-- Hours Graph Section -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Daily Breakdown"
-            android:textColor="@color/md_theme_onSurface"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="12dp" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="12dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Weekly Hours"
+                android:textColor="@color/md_theme_onSurface"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/graphToggleGroup"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:singleSelection="true"
+                app:selectionRequired="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnBarGraph"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:text="Bar"
+                    android:textSize="12sp"
+                    android:paddingHorizontal="12dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnLineGraph"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:text="Line"
+                    android:textSize="12sp"
+                    android:paddingHorizontal="12dp" />
+
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+        </LinearLayout>
+
+        <!-- Bar Graph -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/barGraphCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            app:cardBackgroundColor="@color/md_theme_surface"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp">
+
+            <LinearLayout
+                android:id="@+id/barGraph"
+                android:layout_width="match_parent"
+                android:layout_height="140dp"
+                android:orientation="horizontal"
+                android:padding="16dp"
+                android:gravity="bottom|center_horizontal">
+
+                <!-- Bars will be added programmatically -->
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Line Graph -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/lineGraphCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            android:visibility="gone"
+            app:cardBackgroundColor="@color/md_theme_surface"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp">
+
+            <FrameLayout
+                android:id="@+id/lineGraphContainer"
+                android:layout_width="match_parent"
+                android:layout_height="140dp"
+                android:padding="16dp">
+
+                <!-- Line graph view will be added programmatically -->
+            </FrameLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Daily Breakdown Header with Toggle -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="12dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Daily Breakdown"
+                android:textColor="@color/md_theme_onSurface"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnToggleBreakdown"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Hide"
+                android:textColor="@color/md_theme_primary"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="8dp" />
+        </LinearLayout>
 
         <!-- History List -->
         <androidx.recyclerview.widget.RecyclerView

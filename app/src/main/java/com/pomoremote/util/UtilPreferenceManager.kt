@@ -25,4 +25,28 @@ class UtilPreferenceManager(context: Context) {
 
     val isSoundEnabled: Boolean
         get() = prefs.getBoolean("sound_enabled", true)
+
+    val pomodoroDuration: Int
+        get() {
+            val str = prefs.getString("pomodoro_duration", "25")
+            return try { str?.toInt() ?: 25 } catch (e: NumberFormatException) { 25 }
+        }
+
+    val shortBreakDuration: Int
+        get() {
+            val str = prefs.getString("short_break_duration", "5")
+            return try { str?.toInt() ?: 5 } catch (e: NumberFormatException) { 5 }
+        }
+
+    val longBreakDuration: Int
+        get() {
+            val str = prefs.getString("long_break_duration", "15")
+            return try { str?.toInt() ?: 15 } catch (e: NumberFormatException) { 15 }
+        }
+
+    val dailyGoal: Int
+        get() {
+            val str = prefs.getString("daily_goal", "8")
+            return try { str?.toInt() ?: 8 } catch (e: NumberFormatException) { 8 }
+        }
 }

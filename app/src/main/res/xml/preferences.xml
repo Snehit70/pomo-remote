@@ -8,7 +8,7 @@
             app:summary="@string/ip_address_summary"
             app:defaultValue="192.168.29.98"
             android:inputType="phone" />
-            
+
         <EditTextPreference
             app:key="laptop_port"
             app:title="@string/port_title"
@@ -16,14 +16,46 @@
             app:defaultValue="9876"
             android:inputType="number" />
     </PreferenceCategory>
-    
+
+    <PreferenceCategory app:title="@string/category_timer">
+        <EditTextPreference
+            app:key="pomodoro_duration"
+            app:title="@string/pomodoro_duration_title"
+            app:summary="@string/pomodoro_duration_summary"
+            app:defaultValue="25"
+            android:inputType="number" />
+
+        <EditTextPreference
+            app:key="short_break_duration"
+            app:title="@string/short_break_title"
+            app:summary="@string/short_break_summary"
+            app:defaultValue="5"
+            android:inputType="number" />
+
+        <EditTextPreference
+            app:key="long_break_duration"
+            app:title="@string/long_break_title"
+            app:summary="@string/long_break_summary"
+            app:defaultValue="15"
+            android:inputType="number" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/category_goals">
+        <EditTextPreference
+            app:key="daily_goal"
+            app:title="@string/daily_goal_title"
+            app:summary="@string/daily_goal_summary"
+            app:defaultValue="8"
+            android:inputType="number" />
+    </PreferenceCategory>
+
     <PreferenceCategory app:title="@string/category_notifications">
         <SwitchPreferenceCompat
             app:key="vibrate_enabled"
             app:title="@string/vibrate_title"
             app:summary="@string/vibrate_summary"
             app:defaultValue="true" />
-            
+
         <SwitchPreferenceCompat
             app:key="sound_enabled"
             app:title="@string/sound_title"

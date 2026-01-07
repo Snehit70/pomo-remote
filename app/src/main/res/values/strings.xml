@@ -35,4 +35,18 @@
     
     <string name="sound_title">Sound</string>
     <string name="sound_summary">Play notification sound when timer completes</string>
+
+    <!-- Timer Settings -->
+    <string name="category_timer">Timer</string>
+    <string name="pomodoro_duration_title">Focus Duration</string>
+    <string name="pomodoro_duration_summary">Duration of focus sessions (minutes)</string>
+    <string name="short_break_title">Short Break</string>
+    <string name="short_break_summary">Duration of short breaks (minutes)</string>
+    <string name="long_break_title">Long Break</string>
+    <string name="long_break_summary">Duration of long breaks (minutes)</string>
+
+    <!-- Goals -->
+    <string name="category_goals">Goals</string>
+    <string name="daily_goal_title">Daily Goal</string>
+    <string name="daily_goal_summary">Number of focus sessions per day</string>
 </resources>

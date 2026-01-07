@@ -170,9 +170,11 @@ class TimerFragment : Fragment() {
         val context = context ?: return
         if (!isAdded) return
 
-        val minutes = state.remaining.toInt() / 60
-        val seconds = state.remaining.toInt() % 60
-        tvTimer.text = String.format(Locale.US, "%02d:%02d", minutes, seconds)
+        val totalSeconds = state.remaining
+        val minutes = totalSeconds.toInt() / 60
+        val seconds = totalSeconds.toInt() % 60
+        val millis = ((totalSeconds - totalSeconds.toInt()) * 100).toInt()
+        tvTimer.text = String.format(Locale.US, "%02d:%02d.%02d", minutes, seconds, millis)
 
         var phaseName = state.phase
         var colorRes = R.color.md_theme_primary
