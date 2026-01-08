@@ -55,7 +55,11 @@ class StatsFragment : Fragment() {
     private lateinit var btnToggleBreakdown: MaterialButton
     private lateinit var tvTodayProgress: TextView
     private lateinit var progressToday: LinearProgressIndicator
+    private lateinit var periodToggleGroup: MaterialButtonToggleGroup
+    private lateinit var tvGraphTitle: TextView
     private var isBreakdownVisible = false
+    private var isMonthlyView = false
+    private var historyData: Map<String, DayEntry> = emptyMap()
     private var lineGraphView: LineGraphView? = null
     private var weekData: List<Pair<String, Int>> = emptyList()
 
@@ -90,14 +94,17 @@ class StatsFragment : Fragment() {
         btnToggleBreakdown = view.findViewById(R.id.btnToggleBreakdown)
         tvTodayProgress = view.findViewById(R.id.tvTodayProgress)
         progressToday = view.findViewById(R.id.progressToday)
+        periodToggleGroup = view.findViewById(R.id.periodToggleGroup)
+        tvGraphTitle = view.findViewById(R.id.tvGraphTitle)
 
         recyclerView.layoutManager = LinearLayoutManager(context)
         recyclerView.isNestedScrollingEnabled = false
         recyclerView.visibility = View.GONE
         btnToggleBreakdown.text = "Show"
 
-        // Set default selection to bar graph
+        // Set default selection to bar graph and weekly view
         graphToggleGroup.check(R.id.btnBarGraph)
+        periodToggleGroup.check(R.id.btnWeek)
 
         graphToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (isChecked) {
@@ -109,6 +116,21 @@ class StatsFragment : Fragment() {
                     R.id.btnLineGraph -> {
                         barGraphCard.visibility = View.GONE
                         lineGraphCard.visibility = View.VISIBLE
+                        updateLineGraph()
+                    }
+                }
+            }
+        }
+
+        periodToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isChecked) {
+                isMonthlyView = checkedId == R.id.btnMonth
+                tvGraphTitle.text = if (isMonthlyView) "Monthly Hours" else "Weekly Hours"
+                if (historyData.isNotEmpty()) {
+                    populateBarGraph(historyData)
+                    lineGraphView = null
+                    lineGraphContainer.removeAllViews()
+                    if (graphToggleGroup.checkedButtonId == R.id.btnLineGraph) {
                         updateLineGraph()
                     }
                 }
@@ -194,6 +216,7 @@ class StatsFragment : Fragment() {
 
     private fun populateStats(history: Map<String, DayEntry>) {
         val ctx = context ?: return
+        historyData = history
 
         // Total calculations
         var totalMinutes = 0
@@ -393,10 +416,12 @@ class StatsFragment : Fragment() {
 
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val dayFormat = SimpleDateFormat("EEE", Locale.US)
+        val dayOfMonthFormat = SimpleDateFormat("d", Locale.US)
         val calendar = Calendar.getInstance()
 
-        // Start from 6 days ago
-        calendar.add(Calendar.DAY_OF_YEAR, -6)
+        // Determine period: 7 days for week, 30 days for month
+        val daysToShow = if (isMonthlyView) 30 else 7
+        calendar.add(Calendar.DAY_OF_YEAR, -(daysToShow - 1))
 
         val primaryColor = ContextCompat.getColor(ctx, R.color.md_theme_primary)
         val goldColor = ContextCompat.getColor(ctx, R.color.gold)
@@ -405,14 +430,18 @@ class StatsFragment : Fragment() {
         val dailyGoal = mainActivity?.prefs?.dailyGoal ?: 8
         val maxBarHeight = 80 * resources.displayMetrics.density
 
-        // Collect week data and store for line graph
+        // Collect data for the period
         weekData = mutableListOf<Pair<String, Int>>().apply {
-            for (i in 0 until 7) {
+            for (i in 0 until daysToShow) {
                 val dateStr = dateFormat.format(calendar.time)
-                val dayLabel = dayFormat.format(calendar.time)
+                val label = if (isMonthlyView) {
+                    dayOfMonthFormat.format(calendar.time)
+                } else {
+                    dayFormat.format(calendar.time).take(1).uppercase()
+                }
                 val entry = history[dateStr]
                 val minutes = entry?.work_minutes ?: 0
-                add(Pair(dayLabel.take(1).uppercase(), minutes))
+                add(Pair(label, minutes))
                 calendar.add(Calendar.DAY_OF_YEAR, 1)
             }
         }
@@ -421,17 +450,20 @@ class StatsFragment : Fragment() {
         val maxMinutes = weekData.maxOfOrNull { it.second } ?: 60
         val scaleFactor = if (maxMinutes > 0) maxBarHeight / maxMinutes else 1f
 
-        for ((dayLabel, minutes) in weekData) {
+        for ((index, pair) in weekData.withIndex()) {
+            val (dayLabel, minutes) = pair
             val barContainer = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
             }
 
-            // Hours label on top
+            // Hours label on top (hide for monthly to save space)
             val hoursLabel = TextView(ctx).apply {
                 val hours = minutes / 60f
-                text = if (minutes >= 60) String.format(Locale.US, "%.1fh", hours) else "${minutes}m"
+                text = if (!isMonthlyView) {
+                    if (minutes >= 60) String.format(Locale.US, "%.1fh", hours) else "${minutes}m"
+                } else ""
                 setTextColor(ContextCompat.getColor(ctx, R.color.md_theme_onSurface))
                 textSize = 9f
                 gravity = Gravity.CENTER
@@ -439,13 +471,14 @@ class StatsFragment : Fragment() {
             }
 
             // The bar itself
-            val barHeight = (minutes * scaleFactor).toInt().coerceAtLeast(4)
+            val barHeight = (minutes * scaleFactor).toInt().coerceAtLeast(if (minutes > 0) 4 else 2)
             val goalMinutes = dailyGoal * 25 // Assume 25 min sessions
             val barColor = if (minutes >= goalMinutes) goldColor else primaryColor
+            val barWidth = if (isMonthlyView) 6 else 16
 
             val bar = View(ctx).apply {
                 layoutParams = LinearLayout.LayoutParams(
-                    (16 * resources.displayMetrics.density).toInt(),
+                    (barWidth * resources.displayMetrics.density).toInt(),
                     barHeight
                 ).apply {
                     topMargin = (4 * resources.displayMetrics.density).toInt()
@@ -456,11 +489,12 @@ class StatsFragment : Fragment() {
                 }
             }
 
-            // Day label below
+            // Day label below (show every 5th day for monthly, all for weekly)
+            val showLabel = if (isMonthlyView) (index % 5 == 0 || index == weekData.size - 1) else true
             val dayLabelView = TextView(ctx).apply {
-                text = dayLabel
+                text = if (showLabel) dayLabel else ""
                 setTextColor(ContextCompat.getColor(ctx, R.color.md_theme_onSurface))
-                textSize = 10f
+                textSize = if (isMonthlyView) 8f else 10f
                 gravity = Gravity.CENTER
                 alpha = 0.6f
                 layoutParams = LinearLayout.LayoutParams(
