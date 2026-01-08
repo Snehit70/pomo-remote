@@ -29,6 +29,7 @@ import com.google.android.material.transition.MaterialFadeThrough
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.card.MaterialCardView
+import com.google.android.material.progressindicator.LinearProgressIndicator
 import android.widget.FrameLayout
 
 class StatsFragment : Fragment() {
@@ -52,6 +53,8 @@ class StatsFragment : Fragment() {
     private lateinit var graphToggleGroup: MaterialButtonToggleGroup
     private lateinit var recyclerView: RecyclerView
     private lateinit var btnToggleBreakdown: MaterialButton
+    private lateinit var tvTodayProgress: TextView
+    private lateinit var progressToday: LinearProgressIndicator
     private var isBreakdownVisible = false
     private var lineGraphView: LineGraphView? = null
     private var weekData: List<Pair<String, Int>> = emptyList()
@@ -85,6 +88,8 @@ class StatsFragment : Fragment() {
         graphToggleGroup = view.findViewById(R.id.graphToggleGroup)
         recyclerView = view.findViewById(R.id.statsRecyclerView)
         btnToggleBreakdown = view.findViewById(R.id.btnToggleBreakdown)
+        tvTodayProgress = view.findViewById(R.id.tvTodayProgress)
+        progressToday = view.findViewById(R.id.progressToday)
 
         recyclerView.layoutManager = LinearLayoutManager(context)
         recyclerView.isNestedScrollingEnabled = false
@@ -203,6 +208,16 @@ class StatsFragment : Fragment() {
         val totalMins = totalMinutes % 60
         tvTotalFocus.text = if (totalHours > 0) "${totalHours}h ${totalMins}m" else "${totalMins}m"
         tvTotalSessions.text = "$totalSessions"
+
+        // Today's goal progress
+        val dailyGoal = mainActivity?.prefs?.dailyGoal ?: 8
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val todayStr = dateFormat.format(Date())
+        val todayEntry = history[todayStr]
+        val todaySessions = todayEntry?.completed ?: 0
+        tvTodayProgress.text = "Today: $todaySessions/$dailyGoal"
+        val progressPercent = ((todaySessions.toFloat() / dailyGoal) * 100).coerceAtMost(100f).toInt()
+        progressToday.setProgressCompat(progressPercent, true)
 
         // Daily average
         val daysWithActivity = history.values.count { it.completed > 0 }

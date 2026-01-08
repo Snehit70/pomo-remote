@@ -100,6 +100,26 @@
                         android:textStyle="bold"
                         android:fontFamily="monospace"
                         android:layout_marginTop="4dp" />
+
+                    <!-- Today's Goal Progress -->
+                    <TextView
+                        android:id="@+id/tvTodayProgress"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Today: 0/8"
+                        android:textColor="@color/md_theme_primary"
+                        android:textSize="11sp"
+                        android:layout_marginTop="4dp" />
+
+                    <com.google.android.material.progressindicator.LinearProgressIndicator
+                        android:id="@+id/progressToday"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        app:trackThickness="4dp"
+                        app:trackCornerRadius="2dp"
+                        app:indicatorColor="@color/gold"
+                        app:trackColor="@color/md_theme_surfaceVariant" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
