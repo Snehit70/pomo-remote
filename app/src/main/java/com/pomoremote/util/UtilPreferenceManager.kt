@@ -8,7 +8,7 @@ class UtilPreferenceManager(context: Context) {
     private val prefs: SharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
 
     val laptopIp: String
-        get() = prefs.getString("laptop_ip", "192.168.1.100") ?: "192.168.1.100"
+        get() = prefs.getString("laptop_ip", "192.168.29.98") ?: "192.168.29.98"
 
     val laptopPort: Int
         get() {

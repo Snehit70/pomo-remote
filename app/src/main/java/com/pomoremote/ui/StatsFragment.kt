@@ -141,7 +141,8 @@ class StatsFragment : Fragment() {
                 isMonthlyView = checkedId == R.id.btnMonth
                 tvGraphTitle.text = if (isMonthlyView) "Monthly Hours" else "Weekly Hours"
                 if (historyData.isNotEmpty()) {
-                    populateBarGraph(historyData)
+                    val dayStartHour = mainActivity?.prefs?.dayStartHour ?: 3
+                    populateBarGraph(historyData, dayStartHour)
                     lineGraphView = null
                     lineGraphContainer.removeAllViews()
                     if (graphToggleGroup.checkedButtonId == R.id.btnLineGraph) {

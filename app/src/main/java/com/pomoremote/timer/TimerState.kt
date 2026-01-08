@@ -1,5 +1,7 @@
 package com.pomoremote.timer
 
+import com.google.gson.annotations.SerializedName
+
 class TimerState {
     companion object {
         const val STATUS_STOPPED = "stopped"
@@ -13,13 +15,13 @@ class TimerState {
 
     @JvmField var status: String = STATUS_STOPPED
     @JvmField var phase: String = PHASE_WORK
-    @JvmField var next_phase: String? = null
-    @JvmField var start_time: Double = 0.0
+    @JvmField @SerializedName("next_phase") var next_phase: String? = null
+    @JvmField @SerializedName("start_time") var start_time: Double = 0.0
     @JvmField var duration: Double = 0.0
     @JvmField var remaining: Double = 0.0
     @JvmField var completed: Int = 0
-    @JvmField var goal: Int = 8
+    @JvmField @SerializedName("daily_goal") var goal: Int = 8
     @JvmField var date: String? = null
-    @JvmField var last_action_time: Long = 0
+    @JvmField @SerializedName("last_action_time") var last_action_time: Long = 0
     @JvmField var version: Int = 2
 }
