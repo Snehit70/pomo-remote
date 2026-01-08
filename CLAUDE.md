@@ -49,10 +49,13 @@ MainActivity.kt          # Hosts NavController + binds to PomodoroService
 │   ├── TimerFragment    # Main timer display with circular progress
 │   ├── StatsFragment    # Statistics with bar/line graphs
 │   ├── SettingsFragment # PreferenceFragmentCompat for settings
+│   ├── AboutFragment    # Version info & credits
 │   ├── HistoryFragment  # Session history list
 │   └── LineGraphView    # Custom Canvas-based graph view
 ├── service/
 │   └── PomodoroService  # Foreground service, owns timer state
+├── widget/
+│   └── TimerWidgetProvider # Home screen widget provider
 ├── timer/
 │   ├── TimerState       # Data class for timer state
 │   ├── OfflineTimer     # Local countdown when server unavailable
@@ -82,3 +85,14 @@ MainActivity.kt          # Hosts NavController + binds to PomodoroService
 
 - `network_security_config.xml` allows cleartext traffic for local WebSocket connections
 - Timer state is persisted across app restarts via `UtilPreferenceManager`
+
+## Development Workflow
+
+1. **Read & Plan**: Understand the requirements and explore existing code.
+2. **Implement**: Write code using idiomatic Kotlin and Android best practices.
+3. **Update Version**: Increment `versionCode` and `versionName` in `app/build.gradle.kts` for significant changes.
+4. **Verify**:
+   - Run `./build_apk.sh` to compile and install.
+   - Use `adb logcat -s "PomodoroService"` to debug.
+5. **Commit**: Use Conventional Commits (e.g., `feat:`, `fix:`).
+
