@@ -44,6 +44,10 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
             (activity as? MainActivity)?.service?.reconnect()
         } else if (key == "daily_goal") {
             (activity as? MainActivity)?.service?.updateDailyGoal()
+            (activity as? MainActivity)?.service?.syncConfig()
+        } else if (key == "pomodoro_duration" || key == "short_break_duration" ||
+                   key == "long_break_duration" || key == "long_break_after") {
+            (activity as? MainActivity)?.service?.syncConfig()
         }
     }
 }

@@ -1,9 +1,16 @@
 package com.pomoremote.timer
 
 import android.os.CountDownTimer
+import com.pomoremote.models.Session
 import com.pomoremote.service.PomodoroService
+import com.pomoremote.storage.HistoryRepository
+import com.pomoremote.util.UtilPreferenceManager
 
-class OfflineTimer(private val service: PomodoroService) {
+class OfflineTimer(
+    private val service: PomodoroService,
+    private val prefs: UtilPreferenceManager,
+    private val historyRepository: HistoryRepository
+) {
     private var timer: CountDownTimer? = null
     var state: TimerState = TimerState()
         private set
@@ -30,10 +37,7 @@ class OfflineTimer(private val service: PomodoroService) {
             }
 
             override fun onFinish() {
-                state.remaining = 0.0
-                state.status = TimerState.STATUS_STOPPED
-                state.completed++
-                service.onTimerComplete(state)
+                handleTimerComplete()
             }
         }.start()
     }
@@ -41,6 +45,40 @@ class OfflineTimer(private val service: PomodoroService) {
     private fun stopLocalTimer() {
         timer?.cancel()
         timer = null
+    }
+
+    private fun handleTimerComplete() {
+        // Record session before updating state
+        val session = Session(
+            type = state.phase,
+            start = System.currentTimeMillis() / 1000 - state.duration.toLong(),
+            duration = state.duration.toInt(),
+            completed = true
+        )
+        historyRepository.saveSession(session)
+
+        state.remaining = 0.0
+        state.status = TimerState.STATUS_STOPPED
+
+        if (TimerState.PHASE_WORK == state.phase) {
+            state.completed++
+            val longBreakAfter = prefs.longBreakAfter
+
+            if (state.completed > 0 && state.completed % longBreakAfter == 0) {
+                state.phase = TimerState.PHASE_LONG
+                state.duration = (prefs.longBreakDuration * 60).toDouble()
+            } else {
+                state.phase = TimerState.PHASE_SHORT
+                state.duration = (prefs.shortBreakDuration * 60).toDouble()
+            }
+        } else {
+            // Break is done, back to work
+            state.phase = TimerState.PHASE_WORK
+            state.duration = (prefs.pomodoroDuration * 60).toDouble()
+        }
+
+        state.remaining = state.duration
+        service.onTimerComplete(state)
     }
 
     fun toggle() {
@@ -53,7 +91,9 @@ class OfflineTimer(private val service: PomodoroService) {
             state.status = TimerState.STATUS_RUNNING
             state.last_action_time = System.currentTimeMillis() / 1000
             if (state.remaining <= 0) {
-                state.remaining = if (state.duration > 0) state.duration else 1500.0
+                // Should not happen usually as onFinish resets it, but just in case
+                state.remaining = getDurationForPhase(state.phase)
+                state.duration = state.remaining
             }
             startLocalTimer()
             service.onTimerUpdate(state)
@@ -62,27 +102,37 @@ class OfflineTimer(private val service: PomodoroService) {
 
     fun skip() {
         state.status = TimerState.STATUS_STOPPED
-        state.remaining = 0.0
         state.last_action_time = System.currentTimeMillis() / 1000
         stopLocalTimer()
 
         if (TimerState.PHASE_WORK == state.phase) {
             state.phase = TimerState.PHASE_SHORT
-            state.duration = 300.0
-            state.remaining = 300.0
+            state.duration = (prefs.shortBreakDuration * 60).toDouble()
         } else {
             state.phase = TimerState.PHASE_WORK
-            state.duration = 1500.0
-            state.remaining = 1500.0
+            state.duration = (prefs.pomodoroDuration * 60).toDouble()
         }
+
+        state.remaining = state.duration
         service.onTimerUpdate(state)
     }
 
     fun reset() {
         state.status = TimerState.STATUS_STOPPED
+        state.duration = getDurationForPhase(state.phase)
         state.remaining = state.duration
         state.last_action_time = System.currentTimeMillis() / 1000
         stopLocalTimer()
         service.onTimerUpdate(state)
+    }
+
+    private fun getDurationForPhase(phase: String): Double {
+        val minutes = when (phase) {
+            TimerState.PHASE_WORK -> prefs.pomodoroDuration
+            TimerState.PHASE_SHORT -> prefs.shortBreakDuration
+            TimerState.PHASE_LONG -> prefs.longBreakDuration
+            else -> 25
+        }
+        return (minutes * 60).toDouble()
     }
 }

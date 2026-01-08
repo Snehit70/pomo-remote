@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.*
 import android.util.Log
 import com.pomoremote.network.WebSocketClient
+import com.pomoremote.storage.HistoryRepository
 import com.pomoremote.timer.OfflineTimer
 import com.pomoremote.timer.SyncManager
 import com.pomoremote.timer.TimerState
@@ -27,6 +28,7 @@ class PomodoroService : Service(), WebSocketClient.Listener {
     private lateinit var notificationHelper: NotificationHelper
     private lateinit var offlineTimer: OfflineTimer
     private lateinit var syncManager: SyncManager
+    private lateinit var historyRepository: HistoryRepository
     private lateinit var prefs: UtilPreferenceManager
     var isConnected: Boolean = false
         private set
@@ -53,7 +55,8 @@ class PomodoroService : Service(), WebSocketClient.Listener {
         currentState.goal = prefs.dailyGoal
         notificationHelper = NotificationHelper(this)
         webSocketClient = WebSocketClient(this)
-        offlineTimer = OfflineTimer(this)
+        historyRepository = HistoryRepository(this)
+        offlineTimer = OfflineTimer(this, prefs, historyRepository)
         syncManager = SyncManager()
         httpClient = OkHttpClient()
         mainHandler = Handler(Looper.getMainLooper())
@@ -121,6 +124,24 @@ class PomodoroService : Service(), WebSocketClient.Listener {
             mainHandler.postDelayed(syncTimeoutRunnable!!, SYNC_TIMEOUT_MS)
 
             val localState = offlineTimer.state
+
+            // Sync offline history first
+            val offlineSessions = historyRepository.loadSessions()
+            if (offlineSessions.isNotEmpty()) {
+                Log.d(TAG, "Found ${offlineSessions.size} offline sessions to sync")
+                syncManager.syncHistory(prefs.laptopIp, prefs.laptopPort, offlineSessions,
+                    object : SyncManager.SyncCallback {
+                        override fun onSyncSuccess(mergedState: TimerState) {
+                            Log.d(TAG, "History sync successful - clearing local history")
+                            historyRepository.clearSessions()
+                        }
+
+                        override fun onSyncFailed(e: Exception) {
+                            Log.e(TAG, "History sync failed - keeping local history", e)
+                        }
+                    })
+            }
+
             syncManager.syncNow(prefs.laptopIp, prefs.laptopPort, localState,
                 object : SyncManager.SyncCallback {
                     override fun onSyncSuccess(mergedState: TimerState) {
@@ -133,6 +154,20 @@ class PomodoroService : Service(), WebSocketClient.Listener {
                             prefs.dailyGoal = mergedState.goal
                             offlineTimer.updateState(mergedState)
                             syncCompleted = true
+
+                            // Fetch latest config from server
+                            syncManager.fetchConfig(prefs.laptopIp, prefs.laptopPort) { config ->
+                                if (config != null) {
+                                    mainHandler.post {
+                                        prefs.pomodoroDuration = config.durations.work
+                                        prefs.shortBreakDuration = config.durations.short_break
+                                        prefs.longBreakDuration = config.durations.long_break
+                                        prefs.longBreakAfter = config.long_break_after
+                                        prefs.dailyGoal = config.daily_goal
+                                        Log.d(TAG, "Updated local preferences from server config")
+                                    }
+                                }
+                            }
 
                             webSocketClient.send("{\"type\":\"ready\"}")
                             readySent = true
@@ -264,6 +299,24 @@ class PomodoroService : Service(), WebSocketClient.Listener {
             updateNotification()
             broadcastStateUpdate()
         }
+    }
+
+    fun syncConfig() {
+        if (!isConnected) return
+
+        val durations = SyncManager.Durations(
+            work = prefs.pomodoroDuration,
+            short_break = prefs.shortBreakDuration,
+            long_break = prefs.longBreakDuration
+        )
+
+        val config = SyncManager.ConfigPayload(
+            durations = durations,
+            long_break_after = prefs.longBreakAfter,
+            daily_goal = prefs.dailyGoal
+        )
+
+        syncManager.syncConfig(prefs.laptopIp, prefs.laptopPort, config)
     }
 
     private fun sendApiRequest(endpoint: String) {
