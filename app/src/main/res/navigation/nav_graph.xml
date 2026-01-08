@@ -22,4 +22,10 @@
         android:name="com.pomoremote.ui.SettingsFragment"
         android:label="Settings" />
 
+    <fragment
+        android:id="@+id/navigation_history"
+        android:name="com.pomoremote.ui.HistoryFragment"
+        android:label="History"
+        tools:layout="@layout/fragment_history" />
+
 </navigation>

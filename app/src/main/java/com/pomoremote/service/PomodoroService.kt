@@ -13,6 +13,7 @@ import com.pomoremote.timer.OfflineTimer
 import com.pomoremote.timer.SyncManager
 import com.pomoremote.timer.TimerState
 import com.pomoremote.util.UtilPreferenceManager
+import com.pomoremote.widget.TimerWidgetProvider
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -222,6 +223,7 @@ class PomodoroService : Service(), WebSocketClient.Listener {
     private fun broadcastStateUpdate() {
         val intent = Intent("com.pomoremote.STATE_UPDATE")
         sendBroadcast(intent)
+        TimerWidgetProvider.updateAllWidgets(this, currentState)
     }
 
     private fun updateNotification() {
@@ -275,7 +277,13 @@ class PomodoroService : Service(), WebSocketClient.Listener {
     private fun vibrate() {
         if (!prefs.isVibrateEnabled) return
 
-        val v = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        val v = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            vibratorManager.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             v.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE))
         } else {

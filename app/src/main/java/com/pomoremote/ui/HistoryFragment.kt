@@ -54,7 +54,7 @@ class HistoryFragment : Fragment() {
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                activity?.runOnUiThread {
+                activity.runOnUiThread {
                     android.widget.Toast.makeText(
                         context,
                         "Failed to load history: ${e.message}",

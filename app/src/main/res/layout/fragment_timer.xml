@@ -23,31 +23,56 @@
     <!-- Hero Timer Section -->
     <FrameLayout
         android:id="@+id/timerContainer"
-        android:layout_width="300dp"
-        android:layout_height="300dp"
+        android:layout_width="320dp"
+        android:layout_height="320dp"
         app:layout_constraintBottom_toTopOf="@+id/controlsContainer"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/tvConnectionStatus">
 
-        <!-- Background Ring -->
+        <!-- Goal Progress Background -->
         <com.google.android.material.progressindicator.CircularProgressIndicator
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_gravity="center"
-            app:indicatorSize="280dp"
+            app:indicatorSize="320dp"
+            app:trackThickness="6dp"
+            app:trackColor="@color/md_theme_surfaceVariant"
+            app:indicatorColor="@android:color/transparent"
+            android:progress="100" />
+
+        <!-- Goal Progress Arc -->
+        <com.google.android.material.progressindicator.CircularProgressIndicator
+            android:id="@+id/goalProgressIndicator"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center"
+            app:indicatorSize="320dp"
+            app:trackThickness="6dp"
+            app:trackCornerRadius="3dp"
+            app:indicatorColor="@color/gold"
+            app:trackColor="@android:color/transparent"
+            android:progress="0"
+            android:max="100" />
+
+        <!-- Timer Background Ring -->
+        <com.google.android.material.progressindicator.CircularProgressIndicator
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center"
+            app:indicatorSize="260dp"
             app:trackThickness="12dp"
             app:trackColor="@color/md_theme_surfaceVariant"
             app:indicatorColor="@android:color/transparent"
             android:progress="100" />
 
-        <!-- Progress Arc -->
+        <!-- Timer Progress Arc -->
         <com.google.android.material.progressindicator.CircularProgressIndicator
             android:id="@+id/progressIndicator"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_gravity="center"
-            app:indicatorSize="280dp"
+            app:indicatorSize="260dp"
             app:trackThickness="12dp"
             app:trackCornerRadius="6dp"
             app:indicatorColor="@color/md_theme_primary"

@@ -39,6 +39,7 @@ class TimerFragment : Fragment() {
     private lateinit var btnSkip: Button
     private lateinit var btnReset: Button
     private lateinit var progressIndicator: CircularProgressIndicator
+    private lateinit var goalProgressIndicator: CircularProgressIndicator
 
     // Stats card views
     private lateinit var tvTodayFocus: TextView
@@ -80,6 +81,7 @@ class TimerFragment : Fragment() {
         btnSkip = view.findViewById(R.id.btnSkip)
         btnReset = view.findViewById(R.id.btnReset)
         progressIndicator = view.findViewById(R.id.progressIndicator)
+        goalProgressIndicator = view.findViewById(R.id.goalProgressIndicator)
 
         // Stats card
         tvTodayFocus = view.findViewById(R.id.tvTodayFocus)
@@ -249,8 +251,15 @@ class TimerFragment : Fragment() {
         tvPhase.text = phaseName
         val color = ContextCompat.getColor(context, colorRes)
         tvPhase.setTextColor(color)
+        tvTimer.setTextColor(color) // Sync timer text color with phase
         progressIndicator.setIndicatorColor(color)
         btnToggle.backgroundTintList = android.content.res.ColorStateList.valueOf(color)
+
+        // Tint secondary buttons
+        btnSkip.setTextColor(color)
+        // btnSkip.iconTint = colorStateList
+        btnReset.setTextColor(color)
+        // btnReset.iconTint = colorStateList
 
         // Button Icon
         if (TimerState.STATUS_RUNNING == state.status) {
@@ -268,5 +277,13 @@ class TimerFragment : Fragment() {
             tvStatus.text = "Offline"
             tvStatus.setTextColor(ContextCompat.getColor(context, R.color.status_offline))
         }
+
+        // Real-time session update
+        tvSessions.text = "${state.completed}"
+
+        // Update goal progress ring
+        val dailyGoal = if (state.goal > 0) state.goal else (mainActivity?.prefs?.dailyGoal ?: 8)
+        val goalProgress = ((state.completed.toFloat() / dailyGoal) * 100).toInt().coerceIn(0, 100)
+        goalProgressIndicator.setProgressCompat(goalProgress, true)
     }
 }

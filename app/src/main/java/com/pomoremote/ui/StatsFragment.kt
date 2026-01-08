@@ -1,5 +1,9 @@
 package com.pomoremote.ui
 
+import android.content.Intent
+import androidx.core.content.FileProvider
+import java.io.File
+import android.widget.Toast
 import android.animation.ValueAnimator
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -57,6 +61,8 @@ class StatsFragment : Fragment() {
     private lateinit var progressToday: LinearProgressIndicator
     private lateinit var periodToggleGroup: MaterialButtonToggleGroup
     private lateinit var tvGraphTitle: TextView
+    private lateinit var heatmapView: HeatmapView
+    private lateinit var btnExport: MaterialButton
     private var isBreakdownVisible = false
     private var isMonthlyView = false
     private var historyData: Map<String, DayEntry> = emptyMap()
@@ -68,6 +74,12 @@ class StatsFragment : Fragment() {
 
     private val mainActivity: MainActivity?
         get() = activity as? MainActivity
+
+    private val currentGoal: Int
+        get() {
+            val serviceGoal = mainActivity?.service?.currentState?.goal ?: 0
+            return if (serviceGoal > 0) serviceGoal else (mainActivity?.prefs?.dailyGoal ?: 8)
+        }
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -96,6 +108,8 @@ class StatsFragment : Fragment() {
         progressToday = view.findViewById(R.id.progressToday)
         periodToggleGroup = view.findViewById(R.id.periodToggleGroup)
         tvGraphTitle = view.findViewById(R.id.tvGraphTitle)
+        heatmapView = view.findViewById(R.id.heatmapView)
+        btnExport = view.findViewById(R.id.btnExport)
 
         recyclerView.layoutManager = LinearLayoutManager(context)
         recyclerView.isNestedScrollingEnabled = false
@@ -143,7 +157,56 @@ class StatsFragment : Fragment() {
             animateBreakdown(isBreakdownVisible)
         }
 
+        btnExport.setOnClickListener {
+            exportStats()
+        }
+
         fetchStats()
+    }
+
+    private fun exportStats() {
+        val ctx = context ?: return
+        if (historyData.isEmpty()) {
+            Toast.makeText(ctx, "No data to export", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        try {
+            // Create CSV content
+            val csvBuilder = StringBuilder()
+            csvBuilder.append("Date,Minutes,Sessions\n")
+
+            val sortedEntries = historyData.entries
+                .sortedByDescending { it.key } // Newest first
+
+            for ((date, entry) in sortedEntries) {
+                csvBuilder.append("$date,${entry.work_minutes},${entry.completed}\n")
+            }
+
+            // Write to file in cache
+            val fileName = "pomo_stats.csv"
+            val file = File(ctx.cacheDir, fileName)
+            file.writeText(csvBuilder.toString())
+
+            // Share file
+            val uri = FileProvider.getUriForFile(
+                ctx,
+                "${ctx.packageName}.fileprovider",
+                file
+            )
+
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/csv"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+
+            startActivity(Intent.createChooser(intent, "Export Stats CSV"))
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(ctx, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun animateBreakdown(expand: Boolean) {
@@ -215,7 +278,6 @@ class StatsFragment : Fragment() {
     }
 
     private fun populateStats(history: Map<String, DayEntry>) {
-        val ctx = context ?: return
         historyData = history
 
         // Total calculations
@@ -233,7 +295,7 @@ class StatsFragment : Fragment() {
         tvTotalSessions.text = "$totalSessions"
 
         // Today's goal progress
-        val dailyGoal = mainActivity?.prefs?.dailyGoal ?: 8
+        val dailyGoal = currentGoal
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val todayStr = dateFormat.format(Date())
         val todayEntry = history[todayStr]
@@ -259,6 +321,9 @@ class StatsFragment : Fragment() {
 
         // Week grid
         populateWeekGrid(history)
+
+        // Heatmap
+        heatmapView.setData(history)
 
         // Bar graph
         populateBarGraph(history)
@@ -342,7 +407,7 @@ class StatsFragment : Fragment() {
         val surfaceColor = ContextCompat.getColor(ctx, R.color.md_theme_surfaceVariant)
 
         // Get daily goal from preferences
-        val dailyGoal = mainActivity?.prefs?.dailyGoal ?: 8
+        val dailyGoal = currentGoal
 
         for (i in 0 until 7) {
             val dateStr = dateFormat.format(calendar.time)
@@ -427,7 +492,7 @@ class StatsFragment : Fragment() {
         val goldColor = ContextCompat.getColor(ctx, R.color.gold)
 
         // Get daily goal and max height
-        val dailyGoal = mainActivity?.prefs?.dailyGoal ?: 8
+        val dailyGoal = currentGoal
         val maxBarHeight = 80 * resources.displayMetrics.density
 
         // Collect data for the period
@@ -526,7 +591,7 @@ class StatsFragment : Fragment() {
             lineGraphContainer.addView(lineGraphView)
         }
 
-        val dailyGoal = mainActivity?.prefs?.dailyGoal ?: 8
+        val dailyGoal = currentGoal
         lineGraphView?.setData(weekData, dailyGoal)
     }
 }
