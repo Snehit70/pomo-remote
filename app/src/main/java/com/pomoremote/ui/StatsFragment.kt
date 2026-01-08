@@ -1,10 +1,12 @@
 package com.pomoremote.ui
 
+import android.animation.ValueAnimator
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.animation.DecelerateInterpolator
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -108,11 +110,51 @@ class StatsFragment : Fragment() {
 
         btnToggleBreakdown.setOnClickListener {
             isBreakdownVisible = !isBreakdownVisible
-            recyclerView.visibility = if (isBreakdownVisible) View.VISIBLE else View.GONE
             btnToggleBreakdown.text = if (isBreakdownVisible) "Hide" else "Show"
+            animateBreakdown(isBreakdownVisible)
         }
 
         fetchStats()
+    }
+
+    private fun animateBreakdown(expand: Boolean) {
+        if (expand) {
+            recyclerView.visibility = View.VISIBLE
+            recyclerView.measure(
+                View.MeasureSpec.makeMeasureSpec(recyclerView.width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            )
+            val targetHeight = recyclerView.measuredHeight
+            recyclerView.layoutParams.height = 0
+            recyclerView.alpha = 0f
+
+            val heightAnimator = ValueAnimator.ofInt(0, targetHeight).apply {
+                duration = 250
+                interpolator = DecelerateInterpolator()
+                addUpdateListener { animator ->
+                    recyclerView.layoutParams.height = animator.animatedValue as Int
+                    recyclerView.requestLayout()
+                }
+            }
+            heightAnimator.start()
+            recyclerView.animate().alpha(1f).setDuration(200).start()
+        } else {
+            val initialHeight = recyclerView.height
+            val heightAnimator = ValueAnimator.ofInt(initialHeight, 0).apply {
+                duration = 200
+                interpolator = DecelerateInterpolator()
+                addUpdateListener { animator ->
+                    recyclerView.layoutParams.height = animator.animatedValue as Int
+                    recyclerView.requestLayout()
+                    if (animator.animatedValue == 0) {
+                        recyclerView.visibility = View.GONE
+                        recyclerView.layoutParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                    }
+                }
+            }
+            recyclerView.animate().alpha(0f).setDuration(150).start()
+            heightAnimator.start()
+        }
     }
 
     private fun fetchStats() {
