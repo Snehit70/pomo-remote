@@ -107,3 +107,4 @@ android-sdk/
 # Temporary screenshots and assets
 screen_*.png
 icon_*.png
+*.png

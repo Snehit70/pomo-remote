@@ -41,6 +41,7 @@ class StatsFragment : Fragment() {
 
     private lateinit var tvTotalFocus: TextView
     private lateinit var tvTotalSessions: TextView
+    private lateinit var tvCurrentStreak: TextView
     private lateinit var tvBestStreak: TextView
     private lateinit var tvDailyAvg: TextView
     private lateinit var weekGrid: LinearLayout
@@ -73,6 +74,7 @@ class StatsFragment : Fragment() {
 
         tvTotalFocus = view.findViewById(R.id.tvTotalFocus)
         tvTotalSessions = view.findViewById(R.id.tvTotalSessions)
+        tvCurrentStreak = view.findViewById(R.id.tvCurrentStreak)
         tvBestStreak = view.findViewById(R.id.tvBestStreak)
         tvDailyAvg = view.findViewById(R.id.tvDailyAvg)
         weekGrid = view.findViewById(R.id.weekGrid)
@@ -211,7 +213,11 @@ class StatsFragment : Fragment() {
 
         // Best streak
         val bestStreak = calculateBestStreak(history)
-        tvBestStreak.text = "$bestStreak days"
+        tvBestStreak.text = "$bestStreak"
+
+        // Current streak
+        val currentStreak = calculateCurrentStreak(history)
+        tvCurrentStreak.text = "$currentStreak"
 
         // Week grid
         populateWeekGrid(history)
@@ -250,6 +256,36 @@ class StatsFragment : Fragment() {
             }
         }
         return bestStreak
+    }
+
+    private fun calculateCurrentStreak(history: Map<String, DayEntry>): Int {
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val calendar = Calendar.getInstance()
+        var streak = 0
+
+        // Check today first
+        val todayStr = dateFormat.format(calendar.time)
+        val todayEntry = history[todayStr]
+        val hasActivityToday = (todayEntry?.completed ?: 0) > 0
+
+        // If no activity today, start checking from yesterday
+        if (!hasActivityToday) {
+            calendar.add(Calendar.DAY_OF_YEAR, -1)
+        }
+
+        // Count consecutive days with activity
+        while (true) {
+            val dateStr = dateFormat.format(calendar.time)
+            val entry = history[dateStr]
+            if ((entry?.completed ?: 0) > 0) {
+                streak++
+                calendar.add(Calendar.DAY_OF_YEAR, -1)
+            } else {
+                break
+            }
+        }
+
+        return streak
     }
 
     private fun populateWeekGrid(history: Map<String, DayEntry>) {

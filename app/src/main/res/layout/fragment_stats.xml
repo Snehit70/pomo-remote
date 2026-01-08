@@ -130,21 +130,53 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Best Streak"
+                        android:text="Current / Best"
                         android:textColor="@color/md_theme_onSurface"
                         android:textSize="12sp"
                         android:alpha="0.7" />
 
-                    <TextView
-                        android:id="@+id/tvBestStreak"
+                    <LinearLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="0 days"
-                        android:textColor="@color/status_offline"
-                        android:textSize="24sp"
-                        android:textStyle="bold"
-                        android:fontFamily="monospace"
-                        android:layout_marginTop="4dp" />
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginTop="4dp">
+
+                        <TextView
+                            android:id="@+id/tvCurrentStreak"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="0"
+                            android:textColor="@color/gold"
+                            android:textSize="24sp"
+                            android:textStyle="bold"
+                            android:fontFamily="monospace" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text=" / "
+                            android:textColor="@color/md_theme_onSurface"
+                            android:textSize="18sp"
+                            android:alpha="0.5" />
+
+                        <TextView
+                            android:id="@+id/tvBestStreak"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="0"
+                            android:textColor="@color/status_offline"
+                            android:textSize="24sp"
+                            android:textStyle="bold"
+                            android:fontFamily="monospace" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text=" 🔥"
+                            android:textSize="18sp"
+                            android:layout_marginStart="4dp" />
+                    </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build Commands
 
+**Requires**: JDK 17+
+
 ```bash
 # Build debug APK (uses local SDK/Gradle setup)
 ./build_apk.sh
@@ -75,3 +77,8 @@ MainActivity.kt          # Hosts NavController + binds to PomodoroService
 - **Gson** - JSON parsing for timer state
 - **Material 3** - UI components and theming
 - **Navigation** - Fragment navigation with bottom nav
+
+## Notes
+
+- `network_security_config.xml` allows cleartext traffic for local WebSocket connections
+- Timer state is persisted across app restarts via `UtilPreferenceManager`
