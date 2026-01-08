@@ -50,6 +50,7 @@ class PomodoroService : Service(), WebSocketClient.Listener {
     override fun onCreate() {
         super.onCreate()
         prefs = UtilPreferenceManager(this)
+        currentState.goal = prefs.dailyGoal
         notificationHelper = NotificationHelper(this)
         webSocketClient = WebSocketClient(this)
         offlineTimer = OfflineTimer(this)
@@ -129,6 +130,7 @@ class PomodoroService : Service(), WebSocketClient.Listener {
                             Log.d(TAG, "Sync successful - applying merged state")
                             sanitizeState(mergedState)
                             currentState = mergedState
+                            prefs.dailyGoal = mergedState.goal
                             offlineTimer.updateState(mergedState)
                             syncCompleted = true
 
@@ -185,6 +187,7 @@ class PomodoroService : Service(), WebSocketClient.Listener {
 
             sanitizeState(state)
             this.currentState = state
+            prefs.dailyGoal = state.goal
             offlineTimer.updateState(state)
             updateNotification()
             broadcastStateUpdate()
@@ -251,6 +254,15 @@ class PomodoroService : Service(), WebSocketClient.Listener {
             sendApiRequest("reset")
         } else {
             offlineTimer.reset()
+        }
+    }
+
+    fun updateDailyGoal() {
+        val newGoal = prefs.dailyGoal
+        if (currentState.goal != newGoal) {
+            currentState.goal = newGoal
+            updateNotification()
+            broadcastStateUpdate()
         }
     }
 

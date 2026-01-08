@@ -63,4 +63,12 @@
             app:defaultValue="true" />
     </PreferenceCategory>
 
+    <PreferenceCategory app:title="Info">
+        <Preference
+            app:key="about"
+            app:title="About"
+            app:summary="Version info &amp; credits"
+            app:icon="@drawable/ic_info" />
+    </PreferenceCategory>
+
 </PreferenceScreen>

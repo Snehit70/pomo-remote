@@ -44,9 +44,12 @@ class UtilPreferenceManager(context: Context) {
             return try { str?.toInt() ?: 15 } catch (e: NumberFormatException) { 15 }
         }
 
-    val dailyGoal: Int
+    var dailyGoal: Int
         get() {
             val str = prefs.getString("daily_goal", "8")
             return try { str?.toInt() ?: 8 } catch (e: NumberFormatException) { 8 }
+        }
+        set(value) {
+            prefs.edit().putString("daily_goal", value.toString()).apply()
         }
 }

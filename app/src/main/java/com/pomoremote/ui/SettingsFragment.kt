@@ -3,6 +3,7 @@ package com.pomoremote.ui
 import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.preference.PreferenceFragmentCompat
+import androidx.navigation.fragment.findNavController
 import com.pomoremote.MainActivity
 import com.pomoremote.R
 import com.google.android.material.transition.MaterialFadeThrough
@@ -17,6 +18,15 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         setPreferencesFromResource(R.xml.preferences, rootKey)
+
+        findPreference<androidx.preference.Preference>("about")?.setOnPreferenceClickListener {
+            try {
+                findNavController().navigate(R.id.navigation_about)
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
     }
 
     override fun onResume() {
@@ -32,6 +42,8 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         if (key == "laptop_ip" || key == "laptop_port") {
             (activity as? MainActivity)?.service?.reconnect()
+        } else if (key == "daily_goal") {
+            (activity as? MainActivity)?.service?.updateDailyGoal()
         }
     }
 }
