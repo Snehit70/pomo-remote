@@ -49,7 +49,7 @@ class StatsFragment : Fragment() {
     private lateinit var graphToggleGroup: MaterialButtonToggleGroup
     private lateinit var recyclerView: RecyclerView
     private lateinit var btnToggleBreakdown: MaterialButton
-    private var isBreakdownVisible = true
+    private var isBreakdownVisible = false
     private var lineGraphView: LineGraphView? = null
     private var weekData: List<Pair<String, Int>> = emptyList()
 
@@ -84,6 +84,8 @@ class StatsFragment : Fragment() {
 
         recyclerView.layoutManager = LinearLayoutManager(context)
         recyclerView.isNestedScrollingEnabled = false
+        recyclerView.visibility = View.GONE
+        btnToggleBreakdown.text = "Show"
 
         // Set default selection to bar graph
         graphToggleGroup.check(R.id.btnBarGraph)
