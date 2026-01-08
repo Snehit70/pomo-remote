@@ -296,8 +296,13 @@ class StatsFragment : Fragment() {
 
         // Today's goal progress
         val dailyGoal = currentGoal
+        val dayStartHour = mainActivity?.prefs?.dayStartHour ?: 3
+        val calendar = Calendar.getInstance()
+        if (calendar.get(Calendar.HOUR_OF_DAY) < dayStartHour) {
+            calendar.add(Calendar.DAY_OF_YEAR, -1)
+        }
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        val todayStr = dateFormat.format(Date())
+        val todayStr = dateFormat.format(calendar.time)
         val todayEntry = history[todayStr]
         val todaySessions = todayEntry?.completed ?: 0
         tvTodayProgress.text = "Today: $todaySessions/$dailyGoal"
@@ -316,17 +321,17 @@ class StatsFragment : Fragment() {
         tvBestStreak.text = "$bestStreak"
 
         // Current streak
-        val currentStreak = calculateCurrentStreak(history)
+        val currentStreak = calculateCurrentStreak(history, dayStartHour)
         tvCurrentStreak.text = "$currentStreak"
 
         // Week grid
-        populateWeekGrid(history)
+        populateWeekGrid(history, dayStartHour)
 
         // Heatmap
-        heatmapView.setData(history)
+        heatmapView.setData(history, dayStartHour)
 
         // Bar graph
-        populateBarGraph(history)
+        populateBarGraph(history, dayStartHour)
 
         // History list (last 14 days)
         val historyList = history.entries
@@ -361,9 +366,15 @@ class StatsFragment : Fragment() {
         return bestStreak
     }
 
-    private fun calculateCurrentStreak(history: Map<String, DayEntry>): Int {
+    private fun calculateCurrentStreak(history: Map<String, DayEntry>, dayStartHour: Int): Int {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val calendar = Calendar.getInstance()
+
+        // Adjust for logical day
+        if (calendar.get(Calendar.HOUR_OF_DAY) < dayStartHour) {
+            calendar.add(Calendar.DAY_OF_YEAR, -1)
+        }
+
         var streak = 0
 
         // Check today first
@@ -391,7 +402,7 @@ class StatsFragment : Fragment() {
         return streak
     }
 
-    private fun populateWeekGrid(history: Map<String, DayEntry>) {
+    private fun populateWeekGrid(history: Map<String, DayEntry>, dayStartHour: Int) {
         val ctx = context ?: return
         weekGrid.removeAllViews()
 
@@ -399,7 +410,12 @@ class StatsFragment : Fragment() {
         val dayFormat = SimpleDateFormat("EEE", Locale.US)
         val calendar = Calendar.getInstance()
 
-        // Start from 6 days ago
+        // Adjust for logical day
+        if (calendar.get(Calendar.HOUR_OF_DAY) < dayStartHour) {
+            calendar.add(Calendar.DAY_OF_YEAR, -1)
+        }
+
+        // Start from 6 days ago relative to logical today
         calendar.add(Calendar.DAY_OF_YEAR, -6)
 
         val primaryColor = ContextCompat.getColor(ctx, R.color.md_theme_primary)
@@ -475,7 +491,7 @@ class StatsFragment : Fragment() {
         }
     }
 
-    private fun populateBarGraph(history: Map<String, DayEntry>) {
+    private fun populateBarGraph(history: Map<String, DayEntry>, dayStartHour: Int) {
         val ctx = context ?: return
         barGraph.removeAllViews()
 
@@ -483,6 +499,11 @@ class StatsFragment : Fragment() {
         val dayFormat = SimpleDateFormat("EEE", Locale.US)
         val dayOfMonthFormat = SimpleDateFormat("d", Locale.US)
         val calendar = Calendar.getInstance()
+
+        // Adjust for logical day
+        if (calendar.get(Calendar.HOUR_OF_DAY) < dayStartHour) {
+            calendar.add(Calendar.DAY_OF_YEAR, -1)
+        }
 
         // Determine period: 7 days for week, 30 days for month
         val daysToShow = if (isMonthlyView) 30 else 7

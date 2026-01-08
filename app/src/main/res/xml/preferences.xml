@@ -47,6 +47,13 @@
             app:summary="@string/daily_goal_summary"
             app:defaultValue="8"
             android:inputType="number" />
+
+        <EditTextPreference
+            app:key="day_start_hour"
+            app:title="Day Start Hour"
+            app:summary="The hour (0-23) when a new day begins (e.g., 3 for 3 AM)"
+            app:defaultValue="3"
+            android:inputType="number" />
     </PreferenceCategory>
 
     <PreferenceCategory app:title="@string/category_notifications">

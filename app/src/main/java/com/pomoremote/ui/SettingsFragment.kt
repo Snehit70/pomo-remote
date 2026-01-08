@@ -42,7 +42,7 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         if (key == "laptop_ip" || key == "laptop_port") {
             (activity as? MainActivity)?.service?.reconnect()
-        } else if (key == "daily_goal") {
+        } else if (key == "daily_goal" || key == "day_start_hour") {
             (activity as? MainActivity)?.service?.updateDailyGoal()
             (activity as? MainActivity)?.service?.syncConfig()
         } else if (key == "pomodoro_duration" || key == "short_break_duration" ||

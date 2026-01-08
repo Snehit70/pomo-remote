@@ -81,7 +81,8 @@ class SyncManager {
     data class ConfigPayload(
         val durations: Durations,
         val long_break_after: Int,
-        val daily_goal: Int
+        val daily_goal: Int,
+        val day_start_hour: Int
     )
 
     data class Durations(

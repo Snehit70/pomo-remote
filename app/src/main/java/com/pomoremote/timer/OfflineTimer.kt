@@ -61,7 +61,9 @@ class OfflineTimer(
         state.status = TimerState.STATUS_STOPPED
 
         if (TimerState.PHASE_WORK == state.phase) {
-            state.completed++
+            // Calculate completed from session history (source of truth)
+            state.completed = historyRepository.countTodayCompletedSessions(prefs.dayStartHour)
+            state.date = historyRepository.getEffectiveDateString(prefs.dayStartHour)
             val longBreakAfter = prefs.longBreakAfter
 
             if (state.completed > 0 && state.completed % longBreakAfter == 0) {
@@ -95,6 +97,8 @@ class OfflineTimer(
                 state.remaining = getDurationForPhase(state.phase)
                 state.duration = state.remaining
             }
+            // Set start_time to now - elapsed, matching Go logic
+            state.start_time = (System.currentTimeMillis() / 1000).toDouble() - (state.duration - state.remaining)
             startLocalTimer()
             service.onTimerUpdate(state)
         }

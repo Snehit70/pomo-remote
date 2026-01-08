@@ -70,4 +70,13 @@ class UtilPreferenceManager(context: Context) {
         set(value) {
             prefs.edit().putString("daily_goal", value.toString()).apply()
         }
+
+    var dayStartHour: Int
+        get() {
+            val str = prefs.getString("day_start_hour", "3")
+            return try { str?.toInt() ?: 3 } catch (e: NumberFormatException) { 3 }
+        }
+        set(value) {
+            prefs.edit().putString("day_start_hour", value.toString()).apply()
+        }
 }

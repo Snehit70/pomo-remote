@@ -21,5 +21,5 @@ class TimerState {
     @JvmField var goal: Int = 8
     @JvmField var date: String? = null
     @JvmField var last_action_time: Long = 0
-    @JvmField var version: Int = 0
+    @JvmField var version: Int = 2
 }

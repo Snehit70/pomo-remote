@@ -126,11 +126,16 @@ class TimerFragment : Fragment() {
                     val type = object : TypeToken<Map<String, DayEntry>>() {}.type
                     val historyMap: Map<String, DayEntry> = gson.fromJson(json, type) ?: emptyMap()
 
-                    val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+                    val dayStartHour = mainActivity?.prefs?.dayStartHour ?: 3
+                    val calendar = java.util.Calendar.getInstance()
+                    if (calendar.get(java.util.Calendar.HOUR_OF_DAY) < dayStartHour) {
+                        calendar.add(java.util.Calendar.DAY_OF_YEAR, -1)
+                    }
+                    val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(calendar.time)
                     val todayEntry = historyMap[today]
 
                     // Calculate streak (consecutive days with sessions)
-                    val streak = calculateStreak(historyMap)
+                    val streak = calculateStreak(historyMap, dayStartHour)
 
                     Handler(Looper.getMainLooper()).post {
                         if (!isAdded) return@post
@@ -152,7 +157,7 @@ class TimerFragment : Fragment() {
         })
     }
 
-    private fun calculateStreak(history: Map<String, DayEntry>): Int {
+    private fun calculateStreak(history: Map<String, DayEntry>, dayStartHour: Int): Int {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val sortedDates = history.keys
             .filter { (history[it]?.completed ?: 0) > 0 }
@@ -162,7 +167,10 @@ class TimerFragment : Fragment() {
 
         var streak = 0
         val calendar = java.util.Calendar.getInstance()
-        calendar.time = Date()
+        // Start from the effective current date
+        if (calendar.get(java.util.Calendar.HOUR_OF_DAY) < dayStartHour) {
+            calendar.add(java.util.Calendar.DAY_OF_YEAR, -1)
+        }
 
         for (i in sortedDates.indices) {
             val expectedDate = dateFormat.format(calendar.time)

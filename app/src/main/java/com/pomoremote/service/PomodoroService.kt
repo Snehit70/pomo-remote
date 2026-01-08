@@ -56,6 +56,11 @@ class PomodoroService : Service(), WebSocketClient.Listener {
         notificationHelper = NotificationHelper(this)
         webSocketClient = WebSocketClient(this)
         historyRepository = HistoryRepository(this)
+
+        // Initialize state with current date and completed count
+        currentState.date = historyRepository.getEffectiveDateString(prefs.dayStartHour)
+        currentState.completed = historyRepository.countTodayCompletedSessions(prefs.dayStartHour)
+
         offlineTimer = OfflineTimer(this, prefs, historyRepository)
         syncManager = SyncManager()
         httpClient = OkHttpClient()
@@ -155,19 +160,8 @@ class PomodoroService : Service(), WebSocketClient.Listener {
                             offlineTimer.updateState(mergedState)
                             syncCompleted = true
 
-                            // Fetch latest config from server
-                            syncManager.fetchConfig(prefs.laptopIp, prefs.laptopPort) { config ->
-                                if (config != null) {
-                                    mainHandler.post {
-                                        prefs.pomodoroDuration = config.durations.work
-                                        prefs.shortBreakDuration = config.durations.short_break
-                                        prefs.longBreakDuration = config.durations.long_break
-                                        prefs.longBreakAfter = config.long_break_after
-                                        prefs.dailyGoal = config.daily_goal
-                                        Log.d(TAG, "Updated local preferences from server config")
-                                    }
-                                }
-                            }
+                            // Push local config to server (phone is source of truth)
+                            syncConfig()
 
                             webSocketClient.send("{\"type\":\"ready\"}")
                             readySent = true
@@ -269,6 +263,7 @@ class PomodoroService : Service(), WebSocketClient.Listener {
     }
 
     fun toggleTimer() {
+        checkDayTransition()
         if (isConnected) {
             sendApiRequest("toggle")
         } else {
@@ -277,6 +272,7 @@ class PomodoroService : Service(), WebSocketClient.Listener {
     }
 
     fun skipTimer() {
+        checkDayTransition()
         if (isConnected) {
             sendApiRequest("skip")
         } else {
@@ -285,10 +281,31 @@ class PomodoroService : Service(), WebSocketClient.Listener {
     }
 
     fun resetTimer() {
+        checkDayTransition()
         if (isConnected) {
             sendApiRequest("reset")
         } else {
             offlineTimer.reset()
+        }
+    }
+
+    private fun checkDayTransition() {
+        val today = historyRepository.getEffectiveDateString(prefs.dayStartHour)
+        if (currentState.date != today) {
+            Log.d(TAG, "Day transition detected: ${currentState.date} -> $today. Resetting state.")
+            currentState.status = TimerState.STATUS_STOPPED
+            currentState.phase = TimerState.PHASE_WORK
+            currentState.next_phase = TimerState.PHASE_WORK
+            currentState.start_time = 0.0
+            currentState.duration = 0.0
+            currentState.remaining = 0.0
+            currentState.completed = historyRepository.countTodayCompletedSessions(prefs.dayStartHour)
+            currentState.date = today
+            currentState.last_action_time = System.currentTimeMillis() / 1000
+
+            offlineTimer.updateState(currentState)
+            updateNotification()
+            broadcastStateUpdate()
         }
     }
 
@@ -313,7 +330,8 @@ class PomodoroService : Service(), WebSocketClient.Listener {
         val config = SyncManager.ConfigPayload(
             durations = durations,
             long_break_after = prefs.longBreakAfter,
-            daily_goal = prefs.dailyGoal
+            daily_goal = prefs.dailyGoal,
+            day_start_hour = prefs.dayStartHour
         )
 
         syncManager.syncConfig(prefs.laptopIp, prefs.laptopPort, config)

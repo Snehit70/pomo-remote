@@ -54,8 +54,11 @@ class HeatmapView @JvmOverloads constructor(
         level4Paint.color = primary // 100% intensity
     }
 
-    fun setData(data: Map<String, DayEntry>) {
-        historyData = data
+    private var dayStartHour: Int = 3
+
+    fun setData(data: Map<String, DayEntry>, dayStartHour: Int = 3) {
+        this.historyData = data
+        this.dayStartHour = dayStartHour
         requestLayout()
         invalidate()
     }
@@ -74,8 +77,14 @@ class HeatmapView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        // Reset calendar to end date (today)
-        calendar.time = Date()
+        // Reset calendar to logical end date (today)
+        val now = Calendar.getInstance()
+        if (now.get(Calendar.HOUR_OF_DAY) < dayStartHour) {
+            now.add(Calendar.DAY_OF_YEAR, -1)
+        }
+        val logicalToday = now.time
+
+        calendar.time = logicalToday
 
         // Align to the end of the current week (Saturday) so columns line up
         // Or align so today is the last cell.
