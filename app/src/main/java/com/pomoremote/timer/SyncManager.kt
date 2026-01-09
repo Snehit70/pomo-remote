@@ -3,6 +3,8 @@ package com.pomoremote.timer
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.JsonParser
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -10,10 +12,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
 class SyncManager {
-    interface SyncCallback {
-        fun onSyncSuccess(mergedState: TimerState)
-        fun onSyncFailed(e: Exception)
-    }
 
     private val gson = Gson()
     private val client: OkHttpClient = OkHttpClient.Builder()
@@ -34,43 +32,41 @@ class SyncManager {
         offlineSince = 0
     }
 
-    fun syncNow(ip: String, port: Int, localState: TimerState, callback: SyncCallback?) {
-        Thread {
-            try {
-                val url = "http://$ip:$port/api/sync"
-                val req = SyncRequest()
-                req.state = localState
-                req.offline_since = offlineSince
+    suspend fun syncNow(ip: String, port: Int, localState: TimerState): TimerState = withContext(Dispatchers.IO) {
+        try {
+            val url = "http://$ip:$port/api/sync"
+            val req = SyncRequest()
+            req.state = localState
+            req.offline_since = offlineSince
 
-                val json = gson.toJson(req)
-                val body = json.toRequestBody("application/json".toMediaTypeOrNull())
-                val request = Request.Builder()
-                    .url(url)
-                    .post(body)
-                    .build()
+            val json = gson.toJson(req)
+            val body = json.toRequestBody("application/json".toMediaTypeOrNull())
+            val request = Request.Builder()
+                .url(url)
+                .post(body)
+                .build()
 
-                client.newCall(request).execute().use { response ->
-                    if (response.isSuccessful && response.body != null) {
-                        val responseBody = response.body!!.string()
-                        val jsonResponse = JsonParser.parseString(responseBody).asJsonObject
+            client.newCall(request).execute().use { response ->
+                if (response.isSuccessful && response.body != null) {
+                    val responseBody = response.body!!.string()
+                    val jsonResponse = JsonParser.parseString(responseBody).asJsonObject
 
-                        if (jsonResponse.has("state")) {
-                            val mergedState = gson.fromJson(jsonResponse.get("state"), TimerState::class.java)
-                            offlineSince = 0
-                            Log.d(TAG, "Sync successful")
-                            callback?.onSyncSuccess(mergedState)
-                        } else {
-                            throw Exception("Response missing state field")
-                        }
+                    if (jsonResponse.has("state")) {
+                        val mergedState = gson.fromJson(jsonResponse.get("state"), TimerState::class.java)
+                        offlineSince = 0
+                        Log.d(TAG, "Sync successful")
+                        return@withContext mergedState
                     } else {
-                        throw Exception("Sync request failed: ${response.code}")
+                        throw Exception("Response missing state field")
                     }
+                } else {
+                    throw Exception("Sync request failed: ${response.code}")
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Sync failed", e)
-                callback?.onSyncFailed(e)
             }
-        }.start()
+        } catch (e: Exception) {
+            Log.e(TAG, "Sync failed", e)
+            throw e
+        }
     }
 
     private class SyncRequest {
@@ -91,76 +87,70 @@ class SyncManager {
         val long_break: Int
     )
 
-    fun syncConfig(ip: String, port: Int, config: ConfigPayload) {
-        Thread {
-            try {
-                val url = "http://$ip:$port/api/config"
-                val json = gson.toJson(config)
-                val body = json.toRequestBody("application/json".toMediaTypeOrNull())
-                val request = Request.Builder()
-                    .url(url)
-                    .post(body)
-                    .build()
+    suspend fun syncConfig(ip: String, port: Int, config: ConfigPayload) = withContext(Dispatchers.IO) {
+        try {
+            val url = "http://$ip:$port/api/config"
+            val json = gson.toJson(config)
+            val body = json.toRequestBody("application/json".toMediaTypeOrNull())
+            val request = Request.Builder()
+                .url(url)
+                .post(body)
+                .build()
 
-                client.newCall(request).execute().close()
-                Log.d(TAG, "Config sync successful")
-            } catch (e: Exception) {
-                Log.e(TAG, "Config sync failed", e)
-            }
-        }.start()
+            client.newCall(request).execute().close()
+            Log.d(TAG, "Config sync successful")
+        } catch (e: Exception) {
+            Log.e(TAG, "Config sync failed", e)
+            // We suppress config sync errors as they are not critical
+        }
     }
 
-    fun syncHistory(ip: String, port: Int, sessions: List<com.pomoremote.models.Session>, callback: SyncCallback?) {
-        Thread {
-            try {
-                val url = "http://$ip:$port/api/history/sync"
-                val json = gson.toJson(sessions)
-                val body = json.toRequestBody("application/json".toMediaTypeOrNull())
-                val request = Request.Builder()
-                    .url(url)
-                    .post(body)
-                    .build()
+    suspend fun syncHistory(ip: String, port: Int, sessions: List<com.pomoremote.models.Session>) = withContext(Dispatchers.IO) {
+        try {
+            val url = "http://$ip:$port/api/history/sync"
+            val json = gson.toJson(sessions)
+            val body = json.toRequestBody("application/json".toMediaTypeOrNull())
+            val request = Request.Builder()
+                .url(url)
+                .post(body)
+                .build()
 
-                client.newCall(request).execute().use { response ->
-                    if (response.isSuccessful) {
-                        Log.d(TAG, "History sync successful")
-                        callback?.onSyncSuccess(TimerState()) // Dummy state, we just want the success callback
-                    } else {
-                        throw Exception("History sync failed: ${response.code}")
-                    }
+            client.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    Log.d(TAG, "History sync successful")
+                } else {
+                    throw Exception("History sync failed: ${response.code}")
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "History sync failed", e)
-                callback?.onSyncFailed(e)
             }
-        }.start()
+        } catch (e: Exception) {
+            Log.e(TAG, "History sync failed", e)
+            throw e
+        }
     }
 
-    fun fetchConfig(ip: String, port: Int, callback: (ConfigPayload?) -> Unit) {
-        Thread {
-            try {
-                val url = "http://$ip:$port/api/config"
-                val request = Request.Builder()
-                    .url(url)
-                    .get()
-                    .build()
+    suspend fun fetchConfig(ip: String, port: Int): ConfigPayload? = withContext(Dispatchers.IO) {
+        try {
+            val url = "http://$ip:$port/api/config"
+            val request = Request.Builder()
+                .url(url)
+                .get()
+                .build()
 
-                client.newCall(request).execute().use { response ->
-                    if (response.isSuccessful && response.body != null) {
-                        val responseBody = response.body!!.string()
-                        val config = gson.fromJson(responseBody, ConfigPayload::class.java)
-                        Log.d(TAG, "Fetch config successful")
-                        callback(config)
-                    } else {
-                        Log.e(TAG, "Fetch config failed: ${response.code}")
-                        callback(null)
-                    }
+            client.newCall(request).execute().use { response ->
+                if (response.isSuccessful && response.body != null) {
+                    val responseBody = response.body!!.string()
+                    val config = gson.fromJson(responseBody, ConfigPayload::class.java)
+                    Log.d(TAG, "Fetch config successful")
+                    return@withContext config
+                } else {
+                    Log.e(TAG, "Fetch config failed: ${response.code}")
+                    return@withContext null
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Fetch config failed", e)
-                callback(null)
             }
-        }.start()
+        } catch (e: Exception) {
+            Log.e(TAG, "Fetch config failed", e)
+            return@withContext null
+        }
     }
 
     companion object {

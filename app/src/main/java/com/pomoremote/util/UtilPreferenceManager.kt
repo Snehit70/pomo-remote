@@ -3,9 +3,26 @@ package com.pomoremote.util
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.preference.PreferenceManager
+import com.google.gson.Gson
+import com.pomoremote.timer.TimerState
 
 class UtilPreferenceManager(context: Context) {
     private val prefs: SharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
+    private val gson = Gson()
+
+    fun saveTimerState(state: TimerState) {
+        val json = gson.toJson(state)
+        prefs.edit().putString("saved_timer_state", json).apply()
+    }
+
+    fun loadTimerState(): TimerState? {
+        val json = prefs.getString("saved_timer_state", null) ?: return null
+        return try {
+            gson.fromJson(json, TimerState::class.java)
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     val laptopIp: String
         get() = prefs.getString("laptop_ip", "192.168.29.98") ?: "192.168.29.98"

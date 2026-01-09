@@ -79,6 +79,8 @@ class OfflineTimer(
             state.duration = (prefs.pomodoroDuration * 60).toDouble()
         }
 
+        recalculateNextPhase()
+
         state.remaining = state.duration
         service.onTimerComplete(state)
     }
@@ -117,6 +119,8 @@ class OfflineTimer(
             state.duration = (prefs.pomodoroDuration * 60).toDouble()
         }
 
+        recalculateNextPhase()
+
         state.remaining = state.duration
         service.onTimerUpdate(state)
     }
@@ -127,7 +131,28 @@ class OfflineTimer(
         state.remaining = state.duration
         state.last_action_time = System.currentTimeMillis() / 1000
         stopLocalTimer()
+
+        recalculateNextPhase()
+
         service.onTimerUpdate(state)
+    }
+
+    private fun recalculateNextPhase() {
+        if (TimerState.PHASE_WORK == state.phase) {
+            // Current is WORK. Next is a break.
+            // If we finish this WORK, completed count will go up by 1.
+            val nextCompleted = state.completed + 1
+            val longBreakAfter = prefs.longBreakAfter
+
+            if (nextCompleted > 0 && nextCompleted % longBreakAfter == 0) {
+                state.next_phase = TimerState.PHASE_LONG
+            } else {
+                state.next_phase = TimerState.PHASE_SHORT
+            }
+        } else {
+            // Current is BREAK. Next is WORK.
+            state.next_phase = TimerState.PHASE_WORK
+        }
     }
 
     private fun getDurationForPhase(phase: String): Double {

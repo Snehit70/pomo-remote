@@ -24,4 +24,20 @@ class TimerState {
     @JvmField var date: String? = null
     @JvmField @SerializedName("last_action_time") var last_action_time: Long = 0
     @JvmField var version: Int = 2
+
+    fun copy(): TimerState {
+        val new = TimerState()
+        new.status = status
+        new.phase = phase
+        new.next_phase = next_phase
+        new.start_time = start_time
+        new.duration = duration
+        new.remaining = remaining
+        new.completed = completed
+        new.goal = goal
+        new.date = date
+        new.last_action_time = last_action_time
+        new.version = version
+        return new
+    }
 }

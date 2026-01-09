@@ -15,6 +15,11 @@ import com.pomoremote.timer.SyncManager
 import com.pomoremote.timer.TimerState
 import com.pomoremote.util.UtilPreferenceManager
 import com.pomoremote.widget.TimerWidgetProvider
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -38,6 +43,11 @@ class PomodoroService : Service(), WebSocketClient.Listener {
     private lateinit var mainHandler: Handler
     private var currentRingtone: Ringtone? = null
 
+    private var lastSavedState: TimerState? = null
+
+    // Coroutine scope for service operations
+    private val serviceScope = MainScope()
+
     @Volatile
     private var syncCompleted = false
     @Volatile
@@ -57,14 +67,42 @@ class PomodoroService : Service(), WebSocketClient.Listener {
         webSocketClient = WebSocketClient(this)
         historyRepository = HistoryRepository(this)
 
-        // Initialize state with current date and completed count
-        currentState.date = historyRepository.getEffectiveDateString(prefs.dayStartHour)
-        currentState.completed = historyRepository.countTodayCompletedSessions(prefs.dayStartHour)
-
         offlineTimer = OfflineTimer(this, prefs, historyRepository)
         syncManager = SyncManager()
         httpClient = OkHttpClient()
         mainHandler = Handler(Looper.getMainLooper())
+
+        // Restore state or initialize default
+        val savedState = prefs.loadTimerState()
+        if (savedState != null) {
+            Log.d(TAG, "Restoring saved state: ${savedState.status} - ${savedState.remaining}s")
+            // Recalculate if it was running
+            if (savedState.status == TimerState.STATUS_RUNNING) {
+                val now = System.currentTimeMillis() / 1000.0
+                val elapsed = now - savedState.start_time
+                val newRemaining = savedState.duration - elapsed
+
+                if (newRemaining <= 0) {
+                    savedState.remaining = 0.0
+                    savedState.status = TimerState.STATUS_STOPPED
+                    // We treat it as stopped at 0, user has to handle completion manually or we just let it be.
+                    // For simplicity, we just show it as 0.
+                } else {
+                    savedState.remaining = newRemaining
+                }
+            }
+            sanitizeState(savedState)
+            currentState = savedState
+        } else {
+            // Initialize state with current date and completed count
+            currentState.date = historyRepository.getEffectiveDateString(prefs.dayStartHour)
+            currentState.completed = historyRepository.countTodayCompletedSessions(prefs.dayStartHour)
+            // Ensure next_phase is set
+            sanitizeState(currentState)
+        }
+
+        // Sync the OfflineTimer with the restored/initial state
+        offlineTimer.updateState(currentState)
 
         startForeground(
             NotificationHelper.NOTIFICATION_ID,
@@ -72,6 +110,34 @@ class PomodoroService : Service(), WebSocketClient.Listener {
         )
 
         connect()
+    }
+
+    private fun saveCurrentState() {
+        // We use a copy to avoid concurrency issues if the state object is being mutated elsewhere
+        // (though currently it's all on main thread)
+        val stateToSave = currentState.copy()
+        lastSavedState = stateToSave
+        prefs.saveTimerState(stateToSave)
+    }
+
+    private fun shouldSaveState(newState: TimerState): Boolean {
+        val last = lastSavedState ?: return true
+
+        if (newState.status != last.status) return true
+        if (newState.phase != last.phase) return true
+        if (newState.goal != last.goal) return true
+        if (newState.completed != last.completed) return true
+        if (newState.date != last.date) return true
+        // If start_time changed (e.g. restart/resume), we must save
+        if (newState.start_time != last.start_time) return true
+
+        // If NOT running, any change in remaining time is a manual adjustment or pause-time update
+        // that we should probably persist.
+        if (newState.status != TimerState.STATUS_RUNNING && newState.remaining != last.remaining) {
+            return true
+        }
+
+        return false
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -106,8 +172,10 @@ class PomodoroService : Service(), WebSocketClient.Listener {
 
     override fun onDestroy() {
         super.onDestroy()
+        serviceScope.cancel() // Cancel all coroutines
         syncTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
         webSocketClient.close()
+        historyRepository.shutdown()
     }
 
     override fun onConnected() {
@@ -128,59 +196,48 @@ class PomodoroService : Service(), WebSocketClient.Listener {
             }
             mainHandler.postDelayed(syncTimeoutRunnable!!, SYNC_TIMEOUT_MS)
 
-            val localState = offlineTimer.state
+            serviceScope.launch {
+                val localState = offlineTimer.state
 
-            // Sync offline history first
-            val offlineSessions = historyRepository.loadSessions()
-            if (offlineSessions.isNotEmpty()) {
-                Log.d(TAG, "Found ${offlineSessions.size} offline sessions to sync")
-                syncManager.syncHistory(prefs.laptopIp, prefs.laptopPort, offlineSessions,
-                    object : SyncManager.SyncCallback {
-                        override fun onSyncSuccess(mergedState: TimerState) {
-                            Log.d(TAG, "History sync successful - clearing local history")
-                            historyRepository.clearSessions()
-                        }
+                // Sync offline history first
+                val offlineSessions = historyRepository.loadSessions()
+                if (offlineSessions.isNotEmpty()) {
+                    Log.d(TAG, "Found ${offlineSessions.size} offline sessions to sync")
+                    try {
+                        syncManager.syncHistory(prefs.laptopIp, prefs.laptopPort, offlineSessions)
+                        Log.d(TAG, "History sync successful - clearing local history")
+                        historyRepository.clearSessions()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "History sync failed - keeping local history", e)
+                    }
+                }
 
-                        override fun onSyncFailed(e: Exception) {
-                            Log.e(TAG, "History sync failed - keeping local history", e)
-                        }
-                    })
+                try {
+                    val mergedState = syncManager.syncNow(prefs.laptopIp, prefs.laptopPort, localState)
+
+                    syncTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+
+                    Log.d(TAG, "Sync successful - applying merged state")
+                    sanitizeState(mergedState)
+                    currentState = mergedState
+                    saveCurrentState()
+                    prefs.dailyGoal = mergedState.goal
+                    offlineTimer.updateState(mergedState)
+                    syncCompleted = true
+
+                    // Push local config to server (phone is source of truth)
+                    syncConfig()
+
+                    webSocketClient.send("{\"type\":\"ready\"}")
+                    readySent = true
+                    Log.d(TAG, "Sent ready message to server")
+
+                    updateNotification()
+                    broadcastStateUpdate()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Sync failed - will accept WS messages on timeout", e)
+                }
             }
-
-            syncManager.syncNow(prefs.laptopIp, prefs.laptopPort, localState,
-                object : SyncManager.SyncCallback {
-                    override fun onSyncSuccess(mergedState: TimerState) {
-                        mainHandler.post {
-                            syncTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
-
-                            Log.d(TAG, "Sync successful - applying merged state")
-                            sanitizeState(mergedState)
-                            currentState = mergedState
-                            prefs.dailyGoal = mergedState.goal
-                            offlineTimer.updateState(mergedState)
-                            syncCompleted = true
-
-                            // Push local config to server (phone is source of truth)
-                            syncConfig()
-
-                            webSocketClient.send("{\"type\":\"ready\"}")
-                            readySent = true
-                            Log.d(TAG, "Sent ready message to server")
-
-                            updateNotification()
-                            broadcastStateUpdate()
-                        }
-                    }
-
-                    override fun onSyncFailed(e: Exception) {
-                        mainHandler.post {
-                            Log.e(TAG, "Sync failed - will accept WS messages on timeout", e)
-                        }
-                    }
-                })
-
-            updateNotification()
-            broadcastStateUpdate()
         }
     }
 
@@ -216,6 +273,9 @@ class PomodoroService : Service(), WebSocketClient.Listener {
 
             sanitizeState(state)
             this.currentState = state
+            if (shouldSaveState(state)) {
+                saveCurrentState()
+            }
             prefs.dailyGoal = state.goal
             offlineTimer.updateState(state)
             updateNotification()
@@ -226,26 +286,47 @@ class PomodoroService : Service(), WebSocketClient.Listener {
     private fun sanitizeState(state: TimerState) {
         if (state.duration <= 0) {
             when (state.phase) {
-                TimerState.PHASE_WORK -> state.duration = 1500.0 // 25 min
-                TimerState.PHASE_SHORT -> state.duration = 300.0 // 5 min
-                TimerState.PHASE_LONG -> state.duration = 900.0  // 15 min
-                else -> state.duration = 1500.0
+                TimerState.PHASE_WORK -> state.duration = (prefs.pomodoroDuration * 60).toDouble()
+                TimerState.PHASE_SHORT -> state.duration = (prefs.shortBreakDuration * 60).toDouble()
+                TimerState.PHASE_LONG -> state.duration = (prefs.longBreakDuration * 60).toDouble()
+                else -> state.duration = (prefs.pomodoroDuration * 60).toDouble()
             }
         }
         // Ensure remaining doesn't exceed duration
         if (state.remaining > state.duration) {
             state.remaining = state.duration
         }
+
+        // Ensure next_phase is populated
+        if (state.next_phase == null) {
+            if (TimerState.PHASE_WORK == state.phase) {
+                // If we are in WORK, next is BREAK.
+                // We assume we are looking at the *current* state.
+                // If this state finishes, completed + 1.
+                val nextCompleted = state.completed + 1
+                if (nextCompleted > 0 && nextCompleted % prefs.longBreakAfter == 0) {
+                    state.next_phase = TimerState.PHASE_LONG
+                } else {
+                    state.next_phase = TimerState.PHASE_SHORT
+                }
+            } else {
+                state.next_phase = TimerState.PHASE_WORK
+            }
+        }
     }
 
     fun onTimerUpdate(state: TimerState) {
         this.currentState = state
+        if (shouldSaveState(state)) {
+            saveCurrentState()
+        }
         updateNotification()
         broadcastStateUpdate()
     }
 
     fun onTimerComplete(state: TimerState) {
         this.currentState = state
+        saveCurrentState()
         updateNotification()
         broadcastStateUpdate()
         vibrate()
@@ -295,7 +376,7 @@ class PomodoroService : Service(), WebSocketClient.Listener {
             Log.d(TAG, "Day transition detected: ${currentState.date} -> $today. Resetting state.")
             currentState.status = TimerState.STATUS_STOPPED
             currentState.phase = TimerState.PHASE_WORK
-            currentState.next_phase = TimerState.PHASE_WORK
+            currentState.next_phase = TimerState.PHASE_WORK // Ensure next phase is reset too
             currentState.start_time = 0.0
             currentState.duration = 0.0
             currentState.remaining = 0.0
@@ -304,6 +385,7 @@ class PomodoroService : Service(), WebSocketClient.Listener {
             currentState.last_action_time = System.currentTimeMillis() / 1000
 
             offlineTimer.updateState(currentState)
+            saveCurrentState()
             updateNotification()
             broadcastStateUpdate()
         }
@@ -313,32 +395,35 @@ class PomodoroService : Service(), WebSocketClient.Listener {
         val newGoal = prefs.dailyGoal
         if (currentState.goal != newGoal) {
             currentState.goal = newGoal
+            saveCurrentState()
             updateNotification()
             broadcastStateUpdate()
         }
     }
 
     fun syncConfig() {
-        if (!isConnected) return
+        serviceScope.launch {
+            if (!isConnected) return@launch
 
-        val durations = SyncManager.Durations(
-            work = prefs.pomodoroDuration,
-            short_break = prefs.shortBreakDuration,
-            long_break = prefs.longBreakDuration
-        )
+            val durations = SyncManager.Durations(
+                work = prefs.pomodoroDuration,
+                short_break = prefs.shortBreakDuration,
+                long_break = prefs.longBreakDuration
+            )
 
-        val config = SyncManager.ConfigPayload(
-            durations = durations,
-            long_break_after = prefs.longBreakAfter,
-            daily_goal = prefs.dailyGoal,
-            day_start_hour = prefs.dayStartHour
-        )
+            val config = SyncManager.ConfigPayload(
+                durations = durations,
+                long_break_after = prefs.longBreakAfter,
+                daily_goal = prefs.dailyGoal,
+                day_start_hour = prefs.dayStartHour
+            )
 
-        syncManager.syncConfig(prefs.laptopIp, prefs.laptopPort, config)
+            syncManager.syncConfig(prefs.laptopIp, prefs.laptopPort, config)
+        }
     }
 
     private fun sendApiRequest(endpoint: String) {
-        Thread {
+        serviceScope.launch(Dispatchers.IO) {
             try {
                 val ip = prefs.laptopIp
                 val port = prefs.laptopPort
@@ -354,7 +439,7 @@ class PomodoroService : Service(), WebSocketClient.Listener {
             } catch (e: IOException) {
                 Log.e(TAG, "API request failed", e)
             }
-        }.start()
+        }
     }
 
     private fun vibrate() {

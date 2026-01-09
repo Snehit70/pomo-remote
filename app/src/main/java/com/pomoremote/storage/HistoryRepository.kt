@@ -16,36 +16,54 @@ import java.util.Locale
 class HistoryRepository(private val context: Context) {
     private val gson = Gson()
     private val filename = "offline_history.json"
+    private val diskExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
 
-    @Synchronized
+    @Volatile
+    private var cache: List<Session>? = null
+    private val cacheLock = Any()
+
+    init {
+        // Preload cache asynchronously
+        diskExecutor.execute {
+            loadFromDisk()
+        }
+    }
+
     fun saveSession(session: Session) {
-        val sessions = loadSessions().toMutableList()
-        sessions.add(session)
-        saveSessionsInternal(sessions)
+        synchronized(cacheLock) {
+            val current = getCacheInternal().toMutableList()
+            current.add(session)
+            cache = current
+        }
+
+        diskExecutor.execute {
+            saveSessionsToDisk()
+        }
     }
 
-    @Synchronized
     fun loadSessions(): List<Session> {
-        val file = File(context.filesDir, filename)
-        if (!file.exists()) {
-            return emptyList()
-        }
+        return getCacheInternal()
+    }
 
-        return try {
-            FileReader(file).use { reader ->
-                val type = object : TypeToken<List<Session>>() {}.type
-                gson.fromJson(reader, type) ?: emptyList()
+    private fun getCacheInternal(): List<Session> {
+        synchronized(cacheLock) {
+            if (cache == null) {
+                // Fallback to synchronous load if accessed before async init (should be rare)
+                cache = loadFromDisk()
             }
-        } catch (e: Exception) {
-            emptyList()
+            return cache!!
         }
     }
 
-    @Synchronized
     fun clearSessions() {
-        val file = File(context.filesDir, filename)
-        if (file.exists()) {
-            file.delete()
+        synchronized(cacheLock) {
+            cache = emptyList()
+        }
+        diskExecutor.execute {
+            val file = File(context.filesDir, filename)
+            if (file.exists()) {
+                file.delete()
+            }
         }
     }
 
@@ -53,9 +71,8 @@ class HistoryRepository(private val context: Context) {
      * Counts completed work sessions for today from local offline history.
      * This is the source of truth for offline completed count.
      */
-    @Synchronized
     fun countTodayCompletedSessions(dayStartHour: Int): Int {
-        val sessions = loadSessions()
+        val sessions = getCacheInternal()
         if (sessions.isEmpty()) return 0
 
         val todayStart = getTodayStartTimestamp(dayStartHour)
@@ -87,11 +104,36 @@ class HistoryRepository(private val context: Context) {
         return dateFormat.format(calendar.time)
     }
 
-    @Synchronized
-    private fun saveSessionsInternal(sessions: List<Session>) {
+    private fun loadFromDisk(): List<Session> {
         val file = File(context.filesDir, filename)
-        FileWriter(file).use { writer ->
-            gson.toJson(sessions, writer)
+        if (!file.exists()) {
+            return emptyList()
         }
+
+        return try {
+            FileReader(file).use { reader ->
+                val type = object : TypeToken<List<Session>>() {}.type
+                gson.fromJson(reader, type) ?: emptyList()
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun saveSessionsToDisk() {
+        val snapshot = synchronized(cacheLock) { cache } ?: return
+
+        try {
+            val file = File(context.filesDir, filename)
+            FileWriter(file).use { writer ->
+                gson.toJson(snapshot, writer)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun shutdown() {
+        diskExecutor.shutdown()
     }
 }
