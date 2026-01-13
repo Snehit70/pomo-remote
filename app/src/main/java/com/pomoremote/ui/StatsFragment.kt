@@ -21,12 +21,10 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import com.pomoremote.MainActivity
 import com.pomoremote.R
-import okhttp3.*
-import java.io.IOException
+import com.pomoremote.db.DayStatsEntity
+import com.pomoremote.db.HistoryCacheRepository
 import java.text.SimpleDateFormat
 import java.util.*
 import com.google.android.material.transition.MaterialFadeThrough
@@ -35,6 +33,11 @@ import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.progressindicator.LinearProgressIndicator
 import android.widget.FrameLayout
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class StatsFragment : Fragment() {
 
@@ -69,8 +72,9 @@ class StatsFragment : Fragment() {
     private var lineGraphView: LineGraphView? = null
     private var weekData: List<Pair<String, Int>> = emptyList()
 
-    private val client = OkHttpClient()
-    private val gson = Gson()
+    private var historyCacheRepository: HistoryCacheRepository? = null
+    private val scope = CoroutineScope(Dispatchers.Main + Job())
+    private var isOfflineMode = false
 
     private val mainActivity: MainActivity?
         get() = activity as? MainActivity
@@ -162,7 +166,96 @@ class StatsFragment : Fragment() {
             exportStats()
         }
 
-        fetchStats()
+        // Initialize repository
+        context?.let {
+            historyCacheRepository = HistoryCacheRepository(it)
+        }
+
+        loadStats()
+    }
+
+    /**
+     * Offline-first stats loading:
+     * 1. Show cached data immediately
+     * 2. Sync from server in background
+     * 3. Update UI when sync completes
+     */
+    private fun loadStats() {
+        val activity = mainActivity ?: return
+        val repo = historyCacheRepository ?: return
+
+        scope.launch {
+            // Step 1: Load cached data immediately
+            val cached = withContext(Dispatchers.IO) {
+                repo.getCachedDayStats()
+            }
+
+            if (cached.isNotEmpty()) {
+                val historyMap = convertToHistoryMap(cached)
+                populateStats(historyMap)
+                isOfflineMode = false
+            }
+
+            // Step 2: Sync from server in background
+            val ip = activity.prefs.laptopIp
+            val port = activity.prefs.laptopPort
+
+            val result = withContext(Dispatchers.IO) {
+                repo.syncFromServer(ip, port)
+            }
+
+            if (!isAdded) return@launch
+
+            when (result) {
+                is HistoryCacheRepository.SyncResult.Success -> {
+                    // Reload from cache after successful sync
+                    val updated = withContext(Dispatchers.IO) {
+                        repo.getCachedDayStats()
+                    }
+                    if (updated.isNotEmpty()) {
+                        val historyMap = convertToHistoryMap(updated)
+                        populateStats(historyMap)
+                    }
+                    isOfflineMode = false
+                }
+                is HistoryCacheRepository.SyncResult.NetworkError -> {
+                    // Already showing cached data, just mark as offline
+                    if (cached.isEmpty()) {
+                        showEmptyState()
+                    }
+                    isOfflineMode = true
+                }
+                is HistoryCacheRepository.SyncResult.Error -> {
+                    if (cached.isEmpty()) {
+                        showEmptyState()
+                    }
+                    isOfflineMode = true
+                }
+            }
+        }
+    }
+
+    /**
+     * Convert Room entities back to the Map format the UI expects.
+     */
+    private fun convertToHistoryMap(entities: List<DayStatsEntity>): Map<String, DayEntry> {
+        return entities.associate { entity ->
+            entity.date to DayEntry(
+                completed = entity.completed,
+                work_minutes = entity.workMinutes,
+                break_minutes = entity.breakMinutes
+            )
+        }
+    }
+
+    private fun showEmptyState() {
+        tvTotalFocus.text = "0m"
+        tvTotalSessions.text = "0"
+        tvCurrentStreak.text = "0"
+        tvBestStreak.text = "0"
+        tvDailyAvg.text = "0m"
+        tvTodayProgress.text = "Today: 0/${currentGoal}"
+        progressToday.setProgressCompat(0, false)
     }
 
     private fun exportStats() {
@@ -248,34 +341,6 @@ class StatsFragment : Fragment() {
             recyclerView.animate().alpha(0f).setDuration(150).start()
             heightAnimator.start()
         }
-    }
-
-    private fun fetchStats() {
-        val activity = mainActivity ?: return
-        val ip = activity.prefs.laptopIp
-        val port = activity.prefs.laptopPort
-        val url = "http://$ip:$port/api/history"
-
-        val request = Request.Builder().url(url).build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                // Show error state
-            }
-
-            override fun onResponse(call: Call, response: Response) {
-                if (response.isSuccessful) {
-                    val json = response.body?.string()
-                    val type = object : TypeToken<Map<String, DayEntry>>() {}.type
-                    val historyMap: Map<String, DayEntry> = gson.fromJson(json, type) ?: emptyMap()
-
-                    Handler(Looper.getMainLooper()).post {
-                        if (!isAdded) return@post
-                        populateStats(historyMap)
-                    }
-                }
-            }
-        })
     }
 
     private fun populateStats(history: Map<String, DayEntry>) {

@@ -1,31 +1,33 @@
+// app/src/main/java/com/pomoremote/ui/HistoryFragment.kt
 package com.pomoremote.ui
 
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import com.pomoremote.MainActivity
 import com.pomoremote.R
-import okhttp3.*
-import java.io.IOException
+import com.pomoremote.db.DayStatsEntity
+import com.pomoremote.db.HistoryCacheRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
-import java.util.concurrent.TimeUnit
 
 class HistoryFragment : Fragment() {
 
     private lateinit var recyclerView: RecyclerView
     private lateinit var adapter: HistoryAdapter
-    private val client = OkHttpClient()
-    private val gson = Gson()
+    private var historyCacheRepository: HistoryCacheRepository? = null
+    private val scope = CoroutineScope(Dispatchers.Main + Job())
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -41,44 +43,80 @@ class HistoryFragment : Fragment() {
         adapter = HistoryAdapter()
         recyclerView.adapter = adapter
 
-        fetchHistory()
+        context?.let {
+            historyCacheRepository = HistoryCacheRepository(it)
+        }
+
+        loadHistory()
     }
 
-    private fun fetchHistory() {
+    /**
+     * Offline-first history loading:
+     * 1. Show cached data immediately
+     * 2. Sync from server in background
+     * 3. Update UI when sync completes
+     */
+    private fun loadHistory() {
         val activity = activity as? MainActivity ?: return
-        val ip = activity.prefs.laptopIp
-        val port = activity.prefs.laptopPort
-        val url = "http://$ip:$port/api/history"
+        val repo = historyCacheRepository ?: return
 
-        val request = Request.Builder().url(url).build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                activity.runOnUiThread {
-                    android.widget.Toast.makeText(
-                        context,
-                        "Failed to load history: ${e.message}",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
-                }
+        scope.launch {
+            // Step 1: Load cached data immediately
+            val cached = withContext(Dispatchers.IO) {
+                repo.getCachedDayStats()
             }
 
-            override fun onResponse(call: Call, response: Response) {
-                if (response.isSuccessful) {
-                    val json = response.body?.string()
-                    val type = object : TypeToken<Map<String, DayEntry>>() {}.type
-                    val historyMap: Map<String, DayEntry> = gson.fromJson(json, type)
+            if (cached.isNotEmpty()) {
+                val historyList = convertToHistoryList(cached)
+                adapter.submitList(historyList)
+            }
 
-                    val historyList = historyMap.entries.map {
-                        HistoryItem(it.key, it.value)
-                    }.sortedByDescending { it.date }
+            // Step 2: Sync from server in background
+            val ip = activity.prefs.laptopIp
+            val port = activity.prefs.laptopPort
 
-                    Handler(Looper.getMainLooper()).post {
+            val result = withContext(Dispatchers.IO) {
+                repo.syncFromServer(ip, port)
+            }
+
+            if (!isAdded) return@launch
+
+            when (result) {
+                is HistoryCacheRepository.SyncResult.Success -> {
+                    // Reload from cache after successful sync
+                    val updated = withContext(Dispatchers.IO) {
+                        repo.getCachedDayStats()
+                    }
+                    if (updated.isNotEmpty()) {
+                        val historyList = convertToHistoryList(updated)
                         adapter.submitList(historyList)
                     }
                 }
+                is HistoryCacheRepository.SyncResult.NetworkError -> {
+                    if (cached.isEmpty()) {
+                        Toast.makeText(context, "Offline - no cached data", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                is HistoryCacheRepository.SyncResult.Error -> {
+                    if (cached.isEmpty()) {
+                        Toast.makeText(context, "Error loading history", Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
-        })
+        }
+    }
+
+    private fun convertToHistoryList(entities: List<DayStatsEntity>): List<HistoryItem> {
+        return entities.map { entity ->
+            HistoryItem(
+                date = entity.date,
+                entry = DayEntry(
+                    completed = entity.completed,
+                    work_minutes = entity.workMinutes,
+                    break_minutes = entity.breakMinutes
+                )
+            )
+        }.sortedByDescending { it.date }
     }
 }
 
@@ -112,9 +150,20 @@ class HistoryAdapter : RecyclerView.Adapter<HistoryAdapter.ViewHolder>() {
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val item = list[position]
-        holder.tvDate.text = item.date
-        holder.tvFocus.text = "${item.entry.work_minutes}m"
-        holder.tvBreak.text = "${item.entry.break_minutes}m"
+        // Format date nicely
+        try {
+            val inputFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            val outputFormat = SimpleDateFormat("MMM d, yyyy", Locale.US)
+            val date = inputFormat.parse(item.date)
+            holder.tvDate.text = date?.let { outputFormat.format(it) } ?: item.date
+        } catch (e: Exception) {
+            holder.tvDate.text = item.date
+        }
+
+        val hours = item.entry.work_minutes / 60
+        val mins = item.entry.work_minutes % 60
+        holder.tvFocus.text = if (hours > 0) "${hours}h ${mins}m" else "${mins}m"
+        holder.tvBreak.text = "${item.entry.completed} sessions"
     }
 
     override fun getItemCount() = list.size

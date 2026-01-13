@@ -72,11 +72,15 @@ class HistoryRepository(private val context: Context) {
      * This is the source of truth for offline completed count.
      */
     fun countTodayCompletedSessions(dayStartHour: Int): Int {
+        return getTodayCompletedSessions(dayStartHour).size
+    }
+
+    fun getTodayCompletedSessions(dayStartHour: Int): List<Session> {
         val sessions = getCacheInternal()
-        if (sessions.isEmpty()) return 0
+        if (sessions.isEmpty()) return emptyList()
 
         val todayStart = getTodayStartTimestamp(dayStartHour)
-        return sessions.count { session ->
+        return sessions.filter { session ->
             session.type == TimerState.PHASE_WORK &&
                 session.completed &&
                 session.start >= todayStart

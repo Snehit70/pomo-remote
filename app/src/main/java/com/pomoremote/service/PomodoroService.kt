@@ -10,6 +10,7 @@ import android.os.*
 import android.util.Log
 import com.pomoremote.network.WebSocketClient
 import com.pomoremote.storage.HistoryRepository
+import com.pomoremote.db.HistoryCacheRepository
 import com.pomoremote.timer.OfflineTimer
 import com.pomoremote.timer.SyncManager
 import com.pomoremote.timer.TimerState
@@ -34,6 +35,7 @@ class PomodoroService : Service(), WebSocketClient.Listener {
     private lateinit var offlineTimer: OfflineTimer
     private lateinit var syncManager: SyncManager
     private lateinit var historyRepository: HistoryRepository
+    private lateinit var historyCacheRepository: HistoryCacheRepository
     private lateinit var prefs: UtilPreferenceManager
     var isConnected: Boolean = false
         private set
@@ -66,6 +68,7 @@ class PomodoroService : Service(), WebSocketClient.Listener {
         notificationHelper = NotificationHelper(this)
         webSocketClient = WebSocketClient(this)
         historyRepository = HistoryRepository(this)
+        historyCacheRepository = HistoryCacheRepository(this)
 
         offlineTimer = OfflineTimer(this, prefs, historyRepository)
         syncManager = SyncManager()
@@ -212,16 +215,40 @@ class PomodoroService : Service(), WebSocketClient.Listener {
                     }
                 }
 
+                // Sync full history from server to ensure local DB is up to date and valid
+                try {
+                    historyCacheRepository.syncFromServer(prefs.laptopIp, prefs.laptopPort)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Full history sync failed", e)
+                }
+
                 try {
                     val mergedState = syncManager.syncNow(prefs.laptopIp, prefs.laptopPort, localState)
 
                     syncTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
 
                     Log.d(TAG, "Sync successful - applying merged state")
+
+                    // Validate completed count against actual history (timestamps)
+                    val today = historyRepository.getEffectiveDateString(prefs.dayStartHour)
+                    // If the state is for today, verify the count
+                    if (mergedState.date == today) {
+                        val historySessions = historyCacheRepository.getSessionsForDate(today)
+                        val calculatedCompleted = historySessions.count {
+                            it.type == TimerState.PHASE_WORK && it.completed
+                        }
+
+                        if (mergedState.completed != calculatedCompleted) {
+                            Log.w(TAG, "State completed count (${mergedState.completed}) mismatch with history ($calculatedCompleted). Correcting.")
+                            mergedState.completed = calculatedCompleted
+                        }
+                    }
+
                     sanitizeState(mergedState)
+                    // Use local dailyGoal - phone is source of truth for settings
+                    mergedState.goal = prefs.dailyGoal
                     currentState = mergedState
                     saveCurrentState()
-                    prefs.dailyGoal = mergedState.goal
                     offlineTimer.updateState(mergedState)
                     syncCompleted = true
 
@@ -272,11 +299,12 @@ class PomodoroService : Service(), WebSocketClient.Listener {
             }
 
             sanitizeState(state)
+            // Preserve local dailyGoal - phone is source of truth for settings
+            state.goal = prefs.dailyGoal
             this.currentState = state
             if (shouldSaveState(state)) {
                 saveCurrentState()
             }
-            prefs.dailyGoal = state.goal
             offlineTimer.updateState(state)
             updateNotification()
             broadcastStateUpdate()
